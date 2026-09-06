@@ -1,3 +1,5 @@
+import { revalidateForUpdatedSettings } from '@/lib/settings-revalidate'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -106,6 +108,7 @@ export async function GET() {
       headers: rateLimitHeaders(limitResult),
     })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('获取 AI 设置失败:', error)
     return NextResponse.json({ error: '获取 AI 设置失败' }, { status: 500 })
   }
@@ -130,7 +133,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const body = await request.json().catch(() => ({} as Record<string, unknown>))
+    const body = await readJsonBody(request)
     const normalized = normalizePatchBody(body)
 
     const editableDefinitions = AI_SETTING_DEFINITIONS.filter(
@@ -172,8 +175,10 @@ export async function PATCH(request: NextRequest) {
       )
     )
 
+    revalidateForUpdatedSettings(editableDefinitions.map(item => item.key))
     return NextResponse.json({ ok: true }, { headers: rateLimitHeaders(limitResult) })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     if (error instanceof AiBaseUrlValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }

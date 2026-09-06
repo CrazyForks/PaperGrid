@@ -1,3 +1,5 @@
+import { tryAcquireJob } from '@/lib/concurrency'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import {
@@ -44,6 +46,9 @@ function encodeSseEvent(event: ChatStreamEvent['event'] | 'error', payload: unkn
 export async function POST(request: NextRequest) {
   const logger = createRequestLogger(request, { module: 'admin-ai-chat-stream' })
   let userId: string | null = null
+  let release: (() => void) | null = null
+  const abort = new AbortController()
+  const signal = AbortSignal.any([request.signal, abort.signal, AbortSignal.timeout(120000)])
   try {
     const session = await auth()
     if (!session?.user || session.user.role !== 'ADMIN') {
@@ -62,7 +67,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const input = normalizeChatRequestBody(await request.json().catch(() => ({})))
+    const input = normalizeChatRequestBody(await readJsonBody(request))
+    release = tryAcquireJob('ai-chat', 2)
+    if (!release) return NextResponse.json({ error: '正在处理其他对话，请稍后重试' }, { status: 503, headers: { 'Retry-After': '3' } })
     const encoder = new TextEncoder()
 
     const stream = new ReadableStream<Uint8Array>({
@@ -72,6 +79,7 @@ export async function POST(request: NextRequest) {
         const close = () => {
           if (closed) return
           closed = true
+          release?.()
           try {
             controller.close()
           } catch {
@@ -81,13 +89,14 @@ export async function POST(request: NextRequest) {
 
         const sendEvent = (event: ChatStreamEvent['event'] | 'error', payload: unknown) => {
           if (closed) return
+          if ((controller.desiredSize ?? 0) < -256) { abort.abort(); throw new Error('Client is not reading the response') }
           controller.enqueue(encoder.encode(encodeSseEvent(event, payload)))
         }
 
         void (async () => {
           try {
             await streamAdminAiChat(input, {
-              signal: request.signal,
+              signal,
               onEvent(event) {
                 sendEvent(event.event, event.data)
               },
@@ -107,7 +116,8 @@ export async function POST(request: NextRequest) {
         })()
       },
       cancel() {
-        // noop
+        abort.abort()
+        release?.()
       },
     })
 
@@ -121,6 +131,8 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
+    release?.()
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     const message = toClientSafeErrorMessage(error)
     const status =
       message === '问题至少 1 个字符' || message === '问题内容过长'

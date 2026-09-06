@@ -29,7 +29,16 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  poweredByHeader: false,
+  // Uploads are compressed once; avoid a second public image cache for revocable media.
+  images: { unoptimized: true },
+  cacheMaxMemorySize: 8 * 1024 * 1024,
+  experimental: { cpus: 2 },
+  outputFileTracingExcludes: { '*': ['./.local/**/*', './.env*', './node-compile-cache/**/*', './tests/**/*'] },
   serverExternalPackages: [
+    // Also used directly by the media upgrade script in the standalone image.
+    'sanitize-html',
+    'htmlparser2',
     'sqlite-vec',
     'sqlite-vec-linux-x64',
     'sqlite-vec-linux-arm64',

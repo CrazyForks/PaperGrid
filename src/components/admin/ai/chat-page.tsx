@@ -6,6 +6,8 @@ import { AlertTriangle, Loader2, Menu, MessageSquarePlus, Settings2, Trash2, X }
 import { AdminAiAssistantThread } from '@/components/admin/ai/assistant-thread'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
+import { createThreadSaveQueue, type ThreadSaveState } from '@/lib/ai/chat/thread-save-queue'
 
 type ThreadSummary = {
   id: string
@@ -47,11 +49,19 @@ function resolveApiErrorMessage(payload: unknown, fallback: string) {
 
 export function AdminAiChatPage() {
   const { toast } = useToast()
+  const [threadPage, setThreadPage] = useState(1)
+  const [hasMoreThreads, setHasMoreThreads] = useState(false)
+  const [loadingThreads, setLoadingThreads] = useState(false)
   const [threads, setThreads] = useState<ThreadSummary[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState('')
-  const [initialHistory, setInitialHistory] = useState<
-    Array<{ role: 'user' | 'assistant'; content: string }>
-  >([])
+  const [readyThread, setReadyThread] = useState<ThreadDetail | null>(null)
+  const [detailError, setDetailError] = useState('')
+  const [detailAttempt, setDetailAttempt] = useState(0)
+  const [running, setRunning] = useState(false)
+  const [saveStates, setSaveStates] = useState<Record<string, ThreadSaveState>>({})
+  const [saveQueue] = useState(() => createThreadSaveQueue((id, state) => {
+    setSaveStates(previous => ({ ...previous, [id]: state }))
+  }))
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [creating, setCreating] = useState(false)
@@ -59,8 +69,14 @@ export function AdminAiChatPage() {
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini')
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false)
   const initializedRef = useRef(false)
-  const detailRequestIdRef = useRef(0)
   const threadCacheRef = useRef<Record<string, ThreadDetail>>({})
+  const activateThread = useCallback((id: string) => {
+    setSelectedThreadId(id)
+    setReadyThread(null)
+    setDetailError('')
+  }, [])
+  const unsaved = Object.values(saveStates).some(state => state.status !== 'saved')
+  useUnsavedChanges(unsaved || running, '会话有尚未保存的内容，离开可能丢失消息，确定离开吗？')
 
   const fetchSettingsAndModels = useCallback(async () => {
     const settingsRes = await fetch('/api/admin/ai/settings', { cache: 'no-store' })
@@ -97,39 +113,42 @@ export function AdminAiChatPage() {
     return defaultModel
   }, [])
 
-  const fetchThreads = useCallback(async () => {
-    const res = await fetch('/api/admin/ai/threads', { cache: 'no-store' })
+  const fetchThreads = useCallback(async (page = 1) => {
+    const res = await fetch(`/api/admin/ai/threads?page=${page}`, { cache: 'no-store' })
     const data = await res.json().catch(() => ({} as Record<string, unknown>))
     if (!res.ok) {
       throw new Error(resolveApiErrorMessage(data, '获取会话列表失败'))
     }
 
     const list = Array.isArray(data.threads) ? (data.threads as ThreadSummary[]) : []
-    setThreads(list)
+    setThreads(previous => page === 1 ? list : [...previous, ...list.filter((item: ThreadSummary) => !previous.some(existing => existing.id === item.id))])
+    setThreadPage(page)
+    setHasMoreThreads(data.hasMore === true)
     return list
   }, [])
 
-  const fetchThreadDetail = useCallback(async (threadId: string) => {
+  const loadMoreThreads = async () => {
+    setLoadingThreads(true)
+    try { await fetchThreads(threadPage + 1) }
+    catch { toast({ title: '加载会话失败', variant: 'destructive' }) }
+    finally { setLoadingThreads(false) }
+  }
+
+  const fetchThreadDetail = useCallback(async (threadId: string, signal: AbortSignal) => {
     const id = threadId.trim()
     if (!id) return null
 
-    const res = await fetch(`/api/admin/ai/threads/${encodeURIComponent(id)}`, { cache: 'no-store' })
-    if (!res.ok) {
-      return null
-    }
-
+    const res = await fetch(`/api/admin/ai/threads/${encodeURIComponent(id)}`, { cache: 'no-store', signal })
     const data = await res.json().catch(() => ({} as { thread?: ThreadDetail }))
-    const thread = data.thread
-    if (!thread) {
-      return null
+    if (!res.ok || data.thread?.id !== id) {
+      throw new Error(resolveApiErrorMessage(data, '获取会话内容失败，请重试'))
     }
-
-    threadCacheRef.current[thread.id] = thread
-    return thread
+    return data.thread as ThreadDetail
   }, [])
 
   const createThread = useCallback(
     async (modelHint: string) => {
+      if (running) return null
       setCreating(true)
       try {
         const res = await fetch('/api/admin/ai/threads', {
@@ -153,8 +172,7 @@ export function AdminAiChatPage() {
         const createdThread = created as ThreadDetail
         threadCacheRef.current[createdThread.id] = createdThread
         await fetchThreads()
-        setSelectedThreadId(createdThread.id)
-        setInitialHistory([])
+        activateThread(createdThread.id)
         setMobileHistoryOpen(false)
         return createdThread
       } catch (error) {
@@ -169,13 +187,17 @@ export function AdminAiChatPage() {
         setCreating(false)
       }
     },
-    [fetchThreads, toast]
+    [activateThread, fetchThreads, running, toast]
   )
 
   const deleteThread = useCallback(
     async (threadId: string) => {
       const id = threadId.trim()
-      if (!id) return
+      if (!id || running) return
+      if (saveQueue.hasPending(id)) {
+        toast({ title: '请先保存会话', description: '会话仍有未保存的内容，请重试保存后再删除。', variant: 'destructive' })
+        return
+      }
 
       try {
         const response = await fetch(`/api/admin/ai/threads/${encodeURIComponent(id)}`, {
@@ -192,7 +214,7 @@ export function AdminAiChatPage() {
         if (nextThreads.length === 0) {
           const created = await createThread(selectedModel)
           if (!created) {
-            setSelectedThreadId('')
+            activateThread('')
             setLoadError('删除后创建新会话失败，请重试')
           }
           return
@@ -200,7 +222,7 @@ export function AdminAiChatPage() {
 
         if (selectedThreadId === id) {
           const fallback = nextThreads[0]
-          setSelectedThreadId(fallback.id)
+          activateThread(fallback.id)
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : '删除会话失败'
@@ -211,7 +233,7 @@ export function AdminAiChatPage() {
         })
       }
     },
-    [createThread, fetchThreads, selectedModel, selectedThreadId, toast]
+    [activateThread, createThread, fetchThreads, running, saveQueue, selectedModel, selectedThreadId, toast]
   )
 
   const initializePage = useCallback(async () => {
@@ -223,7 +245,7 @@ export function AdminAiChatPage() {
       const list = await fetchThreads()
       if (list.length > 0) {
         const first = list[0]
-        setSelectedThreadId(first.id)
+        activateThread(first.id)
         return
       }
 
@@ -234,7 +256,7 @@ export function AdminAiChatPage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : '加载 AI 会话失败'
       setLoadError(message)
-      setSelectedThreadId('')
+      activateThread('')
       toast({
         title: '加载失败',
         description: message,
@@ -243,7 +265,7 @@ export function AdminAiChatPage() {
     } finally {
       setLoading(false)
     }
-  }, [createThread, fetchSettingsAndModels, fetchThreads, toast])
+  }, [activateThread, createThread, fetchSettingsAndModels, fetchThreads, toast])
 
   useEffect(() => {
     if (initializedRef.current) {
@@ -256,102 +278,59 @@ export function AdminAiChatPage() {
   useEffect(() => {
     const id = selectedThreadId.trim()
     if (!id) return
+    let active = true
+    const controller = new AbortController()
 
-    const cached = threadCacheRef.current[id]
-    if (cached) {
-      setInitialHistory(normalizeMessages(cached))
-      if (cached.model?.trim()) {
-        const model = cached.model.trim()
-        setSelectedModel(model)
-        setChatModels((prev) => Array.from(new Set([model, ...prev])))
-      }
-    } else {
-      setInitialHistory([])
-    }
-
-    const requestId = ++detailRequestIdRef.current
     void (async () => {
-      const thread = await fetchThreadDetail(id)
-      if (!thread) return
-      if (detailRequestIdRef.current !== requestId) return
-      if (selectedThreadId !== thread.id) return
-
-      setInitialHistory(normalizeMessages(thread))
-      if (thread.model?.trim()) {
-        const model = thread.model.trim()
+      try {
+        // 未保存内容始终优先于服务端旧快照；正常切换重新读取最新历史。
+        const thread = saveQueue.hasPending(id)
+          ? threadCacheRef.current[id]
+          : await fetchThreadDetail(id, controller.signal)
+        if (!active || !thread) return
+        threadCacheRef.current[id] = thread
+        const model = thread.model?.trim() || 'gpt-4o-mini'
         setSelectedModel(model)
-        setChatModels((prev) => Array.from(new Set([model, ...prev])))
+        setChatModels(previous => Array.from(new Set([model, ...previous])))
+        setReadyThread(thread)
+      } catch (error) {
+        if (active) setDetailError(error instanceof Error ? error.message : '获取会话内容失败')
       }
     })()
-  }, [fetchThreadDetail, selectedThreadId])
+
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [detailAttempt, fetchThreadDetail, saveQueue, selectedThreadId])
+
+  const saveLocalThread = (thread: ThreadDetail) => {
+    threadCacheRef.current[thread.id] = thread
+    void saveQueue.update(thread.id, { model: thread.model, messages: normalizeMessages(thread) })
+    const lastMessage = thread.messages[thread.messages.length - 1]?.content || ''
+    const updatedAt = new Date().toISOString()
+    setThreads(previous => previous.map(item => item.id === thread.id
+      ? { ...item, model: thread.model, lastMessage, updatedAt }
+      : item).sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt)))
+  }
 
   const handleModelChange = (nextModel: string) => {
     const model = nextModel.trim()
-    if (!model || !selectedThreadId) return
-
-    setSelectedModel(model)
-    setThreads((prev) =>
-      prev.map((item) => (item.id === selectedThreadId ? { ...item, model } : item))
-    )
-
     const existing = threadCacheRef.current[selectedThreadId]
-    if (existing) {
-      threadCacheRef.current[selectedThreadId] = {
-        ...existing,
-        model,
-      }
-    }
-
-    void fetch(`/api/admin/ai/threads/${encodeURIComponent(selectedThreadId)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: initialHistory,
-      }),
-    }).catch(() => {
-      // noop
-    })
+    if (!model || !existing || running || readyThread?.id !== selectedThreadId) return
+    setSelectedModel(model)
+    saveLocalThread({ ...existing, model })
   }
 
-  const handlePersisted = (messages: Array<{ role: 'user' | 'assistant'; content: string }>) => {
-    setInitialHistory(messages)
-
-    if (selectedThreadId) {
-      const existing = threadCacheRef.current[selectedThreadId]
-      threadCacheRef.current[selectedThreadId] = {
-        id: selectedThreadId,
-        title: existing?.title || 'New Chat',
-        model: selectedModel,
-        messages,
-      }
-    }
-
-    const lastMessage = messages[messages.length - 1]?.content || ''
-    const updatedAt = new Date().toISOString()
-
-    setThreads((prev) => {
-      const next = prev.map((item) =>
-        item.id === selectedThreadId
-          ? {
-              ...item,
-              model: selectedModel,
-              updatedAt,
-              lastMessage,
-            }
-          : item
-      )
-      return [...next].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-    })
+  const handleMessagesChange = (threadId: string, messages: ThreadDetail['messages']) => {
+    const existing = threadCacheRef.current[threadId]
+    if (existing) saveLocalThread({ ...existing, messages })
   }
 
   const selectThread = (threadId: string) => {
     const id = threadId.trim()
-    if (!id) return
-    setSelectedThreadId(id)
-
-    const cached = threadCacheRef.current[id]
-    setInitialHistory(normalizeMessages(cached))
+    if (!id || running || id === selectedThreadId) return
+    activateThread(id)
     setMobileHistoryOpen(false)
   }
 
@@ -398,7 +377,7 @@ export function AdminAiChatPage() {
               variant="outline"
               size="icon"
               onClick={() => void createThread(selectedModel)}
-              disabled={creating}
+              disabled={creating || running}
               aria-label="新建会话"
             >
               {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />}
@@ -446,6 +425,7 @@ export function AdminAiChatPage() {
                 </div>
               )
             })}
+            {hasMoreThreads && <Button variant="ghost" disabled={loadingThreads} onClick={loadMoreThreads}>加载更多会话</Button>}
           </div>
         </aside>
 
@@ -466,6 +446,7 @@ export function AdminAiChatPage() {
                 <select
                   className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                   value={selectedModel}
+                  disabled={running || readyThread?.id !== selectedThreadId}
                   onChange={(event) => handleModelChange(event.target.value)}
                 >
                   {chatModels.map((model) => (
@@ -483,7 +464,7 @@ export function AdminAiChatPage() {
                 size="icon"
                 className="md:hidden"
                 onClick={() => void createThread(selectedModel)}
-                disabled={creating}
+                disabled={creating || running}
                 aria-label="新建会话"
               >
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />}
@@ -552,18 +533,40 @@ export function AdminAiChatPage() {
                     </div>
                   )
                 })}
+                {hasMoreThreads && <Button variant="ghost" disabled={loadingThreads} onClick={loadMoreThreads}>加载更多会话</Button>}
               </div>
             </div>
           ) : null}
 
           <div className={`min-h-0 flex-1 p-3 md:p-4 ${mobileHistoryOpen ? 'hidden md:block' : ''}`}>
-            <AdminAiAssistantThread
-              key={selectedThreadId}
-              threadId={selectedThreadId}
-              model={selectedModel}
-              initialHistory={initialHistory}
-              onPersisted={handlePersisted}
-            />
+            <div className="flex h-full min-h-0 flex-col gap-2">
+              {unsaved && (
+                <div role="status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {Object.entries(saveStates).filter(([, state]) => state.status !== 'saved').map(([id, state]) => (
+                    <span key={id} className="flex items-center gap-2">
+                      {id === selectedThreadId ? '当前会话' : threads.find(thread => thread.id === id)?.title || '其他会话'}：
+                      {state.status === 'saving' ? '正在保存…' : `未保存（${state.error}）`}
+                      {state.status === 'error' && <Button size="sm" variant="outline" onClick={() => void saveQueue.retry(id)}>重试保存</Button>}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="min-h-0 flex-1">
+                {readyThread?.id === selectedThreadId ? (
+                  <AdminAiAssistantThread
+                    key={selectedThreadId}
+                    model={selectedModel}
+                    initialHistory={normalizeMessages(readyThread)}
+                    onMessagesChange={(messages) => handleMessagesChange(selectedThreadId, messages)}
+                    onRunningChange={setRunning}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center gap-3" role="status">
+                    {detailError ? <><span>{detailError}</span><Button variant="outline" onClick={() => { setDetailError(''); setDetailAttempt(value => value + 1) }}>重新加载</Button></> : <><Loader2 className="h-5 w-5 animate-spin" />正在加载会话…</>}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

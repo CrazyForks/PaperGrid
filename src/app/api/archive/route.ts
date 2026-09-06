@@ -1,3 +1,4 @@
+import { pageNumber } from '@/lib/pagination'
 import { NextRequest, NextResponse } from 'next/server'
 import { getArchiveMonthPosts } from '@/lib/archive'
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const year = parseIntParam(searchParams.get('year'))
     const month = parseIntParam(searchParams.get('month'))
-    const page = parseIntParam(searchParams.get('page')) ?? 1
+    const page = pageNumber(searchParams.get('page'))
     const pageSizeRaw = parseIntParam(searchParams.get('pageSize'))
     const pageSize =
       pageSizeRaw === null

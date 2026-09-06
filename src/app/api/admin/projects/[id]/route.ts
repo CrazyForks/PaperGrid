@@ -1,3 +1,5 @@
+import type { Prisma } from '@prisma/client'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -14,9 +16,9 @@ export async function PATCH(
     }
 
     const { id } = await params
-    const body = await request.json()
+    const body = await readJsonBody(request)
 
-    const data: Record<string, any> = {}
+    const data: Prisma.ProjectUpdateInput = {}
 
     if (typeof body.name === 'string') {
       const name = body.name.trim()
@@ -51,6 +53,7 @@ export async function PATCH(
 
     return NextResponse.json({ project })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('更新作品失败:', error)
     return NextResponse.json({ error: '更新作品失败' }, { status: 500 })
   }
@@ -73,6 +76,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '删除成功' })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('删除作品失败:', error)
     return NextResponse.json({ error: '删除作品失败' }, { status: 500 })
   }

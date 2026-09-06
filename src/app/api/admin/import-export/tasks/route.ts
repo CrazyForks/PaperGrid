@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readFormBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createTask } from '@/lib/import-export/tasks'
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const formData = await request.formData()
+    const formData = await readFormBody(request, 51 * 1024 * 1024)
     const type = String(formData.get('type') || '').trim()
     const includeSensitiveRaw = String(formData.get('includeSensitive') || '').trim()
     const sourceRaw = String(formData.get('source') || '').trim()
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
       { status: 201, headers: rateLimitHeaders(limitResult) }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('创建导入导出任务失败:', error)
     const message = error instanceof Error ? error.message : '创建任务失败'
     return NextResponse.json({ error: message }, { status: 400 })

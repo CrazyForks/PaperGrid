@@ -1,3 +1,4 @@
+import { revalidateForUpdatedSettings } from '@/lib/settings-revalidate'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSetting } from '@/lib/settings'
@@ -62,16 +63,17 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const currentRaw = (await getSetting<string>('email.reply.unsubscribeList', '')) || ''
-    const merged = new Set<string>(parseEmailList(currentRaw))
-    merged.add(email)
-    const nextValue = Array.from(merged).join('\n')
-
-    await prisma.setting.upsert({
-      where: { key: 'email.reply.unsubscribeList' },
-      update: { value: { text: nextValue }, group: 'email', editable: false, secret: false },
-      create: { key: 'email.reply.unsubscribeList', value: { text: nextValue }, group: 'email', editable: false, secret: false },
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.setting.findUnique({ where: { key: 'email.reply.unsubscribeList' } })
+      const value = current?.value as Record<string, unknown> | undefined
+      const raw = value ? Object.values(value)[0] : ''
+      const merged = new Set<string>(parseEmailList(typeof raw === 'string' ? raw : ''))
+      merged.add(email)
+      const data = { value: { text: Array.from(merged).join('\n') }, group: 'email', editable: false, secret: true }
+      await tx.setting.upsert({ where: { key: 'email.reply.unsubscribeList' }, update: data,
+        create: { key: 'email.reply.unsubscribeList', ...data } })
     })
+    revalidateForUpdatedSettings(['email.reply.unsubscribeList'])
 
     return new NextResponse(html('已成功退订评论回复邮件通知。'), {
       status: 200,

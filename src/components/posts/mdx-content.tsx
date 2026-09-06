@@ -1,3 +1,4 @@
+import 'katex/dist/katex.min.css'
 import { ComponentProps, isValidElement, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -10,6 +11,7 @@ import { mdxComponents } from '@/components/mdx/mdx-components.server'
 import { Mermaid } from './mermaid'
 import { CodeCopyButton } from './code-copy-button'
 import { cn } from '@/lib/utils'
+import { ArticleImages } from './article-images'
 
 interface MDXContentProps {
   content: string
@@ -45,10 +47,10 @@ const sanitizeSchema = {
     a: ['href', 'title', 'rel', 'target', 'id', 'aria-describedby'],
     img: ['src', 'alt', 'title', 'width', 'height', 'loading', 'decoding'],
     sup: ['id'],
-    li: ['id'],
+    li: ['id', 'className'],
     ol: ['id'],
-    ul: ['id'],
-    section: ['id'],
+    ul: ['id', 'className'],
+    section: ['id', 'className', 'dataFootnotes'],
     h1: ['id'],
     h2: ['id'],
     h3: ['id'],
@@ -94,7 +96,7 @@ export function MDXContent({ content }: MDXContentProps) {
   )
 
   return (
-    <div className="mdx-content max-w-none min-w-0">
+    <ArticleImages>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[
@@ -162,6 +164,6 @@ export function MDXContent({ content }: MDXContentProps) {
       >
         {content}
       </ReactMarkdown>
-    </div>
+    </ArticleImages>
   )
 }

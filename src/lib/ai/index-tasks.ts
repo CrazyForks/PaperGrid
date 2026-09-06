@@ -223,11 +223,13 @@ async function persistTaskState() {
 
 async function ensureTaskStateLoaded() {
   if (globalForAiIndexTaskQueue.__papergridAiIndexTaskStateLoaded) {
+    ensureWorkerRunning()
     return
   }
 
   if (globalForAiIndexTaskQueue.__papergridAiIndexTaskStateLoading) {
     await globalForAiIndexTaskQueue.__papergridAiIndexTaskStateLoading
+    ensureWorkerRunning()
     return
   }
 
@@ -270,6 +272,9 @@ async function ensureTaskStateLoaded() {
   } finally {
     globalForAiIndexTaskQueue.__papergridAiIndexTaskStateLoading = null
   }
+
+  // 恢复 Promise 已完成后启动，避免 worker 与加载状态相互等待。
+  ensureWorkerRunning()
 }
 
 function createTaskId() {
@@ -360,7 +365,7 @@ async function executeTask(task: AiIndexTaskRecord) {
 }
 
 function ensureWorkerRunning() {
-  if (globalForAiIndexTaskQueue.__papergridAiIndexTaskRunning) {
+  if (globalForAiIndexTaskQueue.__papergridAiIndexTaskRunning || taskQueue.length === 0) {
     return
   }
 
@@ -441,6 +446,7 @@ export async function enqueueRebuildIndexTask(input?: {
 
   const pendingRebuildTask = findPendingRebuildTask()
   if (pendingRebuildTask) {
+    ensureWorkerRunning()
     return toPublicTask(pendingRebuildTask)
   }
 

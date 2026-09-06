@@ -16,9 +16,8 @@ export async function GET() {
     }
 
     const tokenSetting = await prisma.setting.findUnique({ where: { key: 'notifications.gotify.token' } })
-    // Prisma Json 类型是联合类型，直接访问可能导致 TS 报错，故先断言为 any
-    const tokenVal = tokenSetting?.value as any
-    const hasToken = Boolean(tokenVal && tokenVal.token)
+    const tokenVal = tokenSetting?.value
+    const hasToken = Boolean(tokenVal && typeof tokenVal === 'object' && !Array.isArray(tokenVal) && 'token' in tokenVal && tokenVal.token)
 
     return NextResponse.json({ hasToken })
   } catch (error) {

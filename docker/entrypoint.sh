@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 
 DATA_DIR="${DATA_DIR:-/data}"
 
@@ -33,23 +34,24 @@ run_migrate() {
   migrations_dir="/app/prisma/migrations"
 
   if [ ! -f "$prisma_cli" ]; then
-    echo "[entrypoint] 未发现 Prisma CLI，跳过迁移" >&2
-    return 0
+    echo "[entrypoint] 未发现 Prisma CLI，无法迁移" >&2
+    return 1
   fi
 
   if [ ! -f "$schema_path" ]; then
-    echo "[entrypoint] 未发现 schema.prisma，跳过迁移" >&2
-    return 0
+    echo "[entrypoint] 未发现 schema.prisma，无法迁移" >&2
+    return 1
   fi
 
   if [ ! -d "$migrations_dir" ]; then
-    echo "[entrypoint] 未发现 migrations 目录，跳过迁移" >&2
-    return 0
+    echo "[entrypoint] 未发现 migrations 目录，无法迁移" >&2
+    return 1
   fi
 
   echo "[entrypoint] 运行数据库迁移（prisma migrate deploy）"
   if ! node "$prisma_cli" migrate deploy --schema="$schema_path"; then
-    echo "[entrypoint] 数据库迁移失败，继续启动" >&2
+    echo "[entrypoint] 数据库迁移失败，停止启动" >&2
+    exit 1
   fi
 }
 
@@ -71,12 +73,14 @@ if [ ! -f "$db_path" ]; then
   if [ -f "/app/prisma/template.db" ]; then
     cp "/app/prisma/template.db" "$db_path"
     echo "[entrypoint] 已初始化数据库: $db_path"
-    echo "[entrypoint] 默认管理员账号: admin@example.com / admin123（首次登录请尽快修改）"
+
   else
     echo "[entrypoint] 缺少模板库 /app/prisma/template.db，无法初始化数据库" >&2
   fi
 fi
 
 run_migrate
+node /app/scripts/upgrade-media.mjs
+node /app/scripts/bootstrap-admin.mjs
 
 exec node server.js

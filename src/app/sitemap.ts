@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next'
 import { prisma } from '@/lib/prisma'
 import { getConfiguredSiteUrl } from '@/lib/seo'
 import { unstable_cache } from 'next/cache'
+import { POSTS_LIST_CACHE_TAG } from '@/lib/public-post-page'
 
 export const revalidate = 3600
 
@@ -91,6 +92,7 @@ async function getSitemapCounts() {
 
 const getSitemapCountsCached = unstable_cache(getSitemapCounts, ['sitemap-counts'], {
   revalidate,
+  tags: [POSTS_LIST_CACHE_TAG],
 })
 
 export async function generateSitemaps() {
@@ -101,18 +103,21 @@ export async function generateSitemaps() {
   return Array.from({ length: totalSitemaps }, (_, id) => ({ id }))
 }
 
-export default async function sitemap({ id }: { id: number }): Promise<MetadataRoute.Sitemap> {
+export default async function sitemap({ id }: { id: Promise<string> }): Promise<MetadataRoute.Sitemap> {
+  const resolvedId = await id
+  if (!/^(0|[1-9]\d*)$/.test(resolvedId)) return []
+  const page = Number(resolvedId)
   const counts = await getSitemapCountsCached()
   const totalCount = counts.staticCount + counts.postsCount + counts.categoriesCount + counts.tagsCount
   const totalSitemaps = Math.max(1, Math.ceil(totalCount / MAX_URLS_PER_SITEMAP))
 
-  if (!Number.isInteger(id) || id < 0 || id >= totalSitemaps) {
+  if (!Number.isSafeInteger(page) || page >= totalSitemaps) {
     return []
   }
 
   const configuredSiteUrl = getConfiguredSiteUrl()
   const toUrl = (path: string) => (configuredSiteUrl ? `${configuredSiteUrl.origin}${path}` : path)
-  const start = id * MAX_URLS_PER_SITEMAP
+  const start = page * MAX_URLS_PER_SITEMAP
   const end = Math.min(start + MAX_URLS_PER_SITEMAP, totalCount)
 
   const routes: MetadataRoute.Sitemap = []

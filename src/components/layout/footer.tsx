@@ -1,8 +1,5 @@
-'use client'
-
 import Image from 'next/image'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import { Github, X, Tv, Mail } from 'lucide-react'
 import { isValidHref } from '@/lib/utils'
 
@@ -32,7 +29,6 @@ export function Footer({
   settings?: Record<string, unknown>
   categories?: FooterCategory[]
 }) {
-  const pathname = usePathname()
   const s: Record<string, unknown> = settings || {}
   const getStr = (key: string, fallback = '') =>
     typeof s[key] === 'string' ? (s[key] as string) : fallback
@@ -54,7 +50,6 @@ export function Footer({
   const showEmail = getBool('profile.social.email.enabled', true) && Boolean(email) && isValidHref(`mailto:${email}`)
   const visibleCategories = categories.slice(0, 3)
 
-  if (pathname?.startsWith('/admin')) return null
 
   return (
     <footer className="pg-public-footer border-t border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
@@ -149,7 +144,7 @@ export function Footer({
               <div className="mt-4 flex items-center gap-4">
                 {showGithub && (
                   <a
-                    href={githubUrl}
+                    aria-label="GitHub" href={githubUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
@@ -159,7 +154,7 @@ export function Footer({
                 )}
                 {showX && (
                   <a
-                    href={xUrl}
+                    aria-label="X" href={xUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
@@ -169,7 +164,7 @@ export function Footer({
                 )}
                 {showBilibili && (
                   <a
-                    href={bilibiliUrl}
+                    aria-label="哔哩哔哩" href={bilibiliUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
@@ -179,7 +174,7 @@ export function Footer({
                 )}
                 {showEmail && (
                   <a
-                    href={`mailto:${email}`}
+                    aria-label="电子邮件" href={`mailto:${email}`}
                     className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
                   >
                     <Mail className="h-5 w-5" />

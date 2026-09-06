@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -16,6 +17,7 @@ export async function GET() {
 
     return NextResponse.json({ projects })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('获取作品失败:', error)
     return NextResponse.json({ error: '获取作品失败' }, { status: 500 })
   }
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const body = await request.json()
+    const body = await readJsonBody(request)
     const name = String(body.name || '').trim()
     const url = String(body.url || '').trim()
     const description = String(body.description || '').trim()
@@ -53,6 +55,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ project }, { status: 201 })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('创建作品失败:', error)
     return NextResponse.json({ error: '创建作品失败' }, { status: 500 })
   }

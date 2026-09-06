@@ -1,6 +1,8 @@
+import { createReadStream } from 'node:fs'
+import { Readable } from 'node:stream'
 import crypto from 'node:crypto'
 import path from 'node:path'
-import { mkdir, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, stat, rm, unlink, writeFile } from 'node:fs/promises'
 import { exportBackupData, importBackupData, parseBooleanFlag } from './backup'
 import { exportMigrationMarkdownZip, importMigrationMarkdown, type MigrationSource } from './migration'
 import { logger } from '@/lib/logger'
@@ -60,7 +62,7 @@ export type PublicTaskRecord = {
   downloadUrl: string | null
 }
 
-const TASK_ROOT = path.join('/tmp', 'papergrid-import-export-tasks')
+const TASK_ROOT = path.join(process.env.DATA_DIR || path.join(process.cwd(), '.local'), 'import-export-tasks')
 const TASK_DATA_DIR = path.join(TASK_ROOT, 'tasks')
 const TASK_FILE_DIR = path.join(TASK_ROOT, 'files')
 const MAX_INPUT_BYTES = 50 * 1024 * 1024
@@ -70,6 +72,8 @@ const TASK_FILE_RETENTION_MS = 24 * 60 * 60 * 1000
 const TASK_RECORD_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 const TASK_DIR_MODE = 0o700
 const TASK_FILE_MODE = 0o600
+
+let pendingAdmissions = 0
 
 const TASK_TYPES = new Set<ImportExportTaskType>([
   'backup_export',
@@ -392,10 +396,13 @@ async function readTask(taskId: string): Promise<TaskRecord> {
 }
 
 async function writeTask(task: TaskRecord) {
-  await writeFile(taskJsonPath(task.id), JSON.stringify(task, null, 2), {
+  const target = taskJsonPath(task.id)
+  const temporary = `${target}.${crypto.randomUUID()}.tmp`
+  await writeFile(temporary, JSON.stringify(task), {
     encoding: 'utf8',
     mode: TASK_FILE_MODE,
   })
+  await rename(temporary, target)
 }
 
 async function updateTask(taskId: string, updater: (task: TaskRecord) => TaskRecord | Promise<TaskRecord>) {
@@ -567,6 +574,7 @@ async function executeTask(taskId: string) {
       finishedAt: nowIso(),
       error: null,
     })
+    await ensureTaskRevalidated(await readTask(taskId))
   } catch (error) {
     const message = error instanceof Error ? error.message : '任务执行失败'
     await updateTask(taskId, async (task) => {
@@ -613,6 +621,9 @@ export async function createTask(input: {
 
   await ensureTaskDirs()
 
+  if (taskQueue.length + runningTaskSet.size + pendingAdmissions >= 4) throw new Error('任务队列已满，请等待现有任务完成')
+  pendingAdmissions++
+  try {
   const taskId = crypto.randomUUID()
   const includeSensitive = parseBooleanFlag(input.includeSensitiveRaw)
   const sourceRaw = (input.sourceRaw || '').trim().toLowerCase()
@@ -669,6 +680,7 @@ export async function createTask(input: {
   scheduleTaskExecution(task.id)
 
   return toPublicTask(task)
+  } finally { pendingAdmissions-- }
 }
 
 export async function getTask(taskId: string) {
@@ -685,22 +697,14 @@ export async function getTaskDownload(taskId: string) {
     throw new Error('任务结果尚不可下载')
   }
 
-  const content = await readFile(task.outputFilePath)
-  let taskAfterDownload = task
-  try {
-    await safeUnlink(task.outputFilePath)
-    taskAfterDownload = await updateTask(taskId, (current) => ({
-      ...current,
-      outputFilePath: null,
-    }))
-  } catch (error) {
-    taskLogger.error({ err: error, taskId }, '清理导出文件失败')
-  }
+  const info = await stat(task.outputFilePath)
+  const content = Readable.toWeb(createReadStream(task.outputFilePath)) as ReadableStream<Uint8Array>
 
   return {
-    task: toPublicTask(taskAfterDownload),
+    task: toPublicTask(task),
     fileName: task.outputFileName,
     mimeType: task.outputMimeType || 'application/octet-stream',
     content,
+    size: info.size,
   }
 }

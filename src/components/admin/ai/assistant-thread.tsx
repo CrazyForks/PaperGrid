@@ -1,5 +1,7 @@
 'use client'
 
+import 'streamdown/styles.css'
+
 import { type PropsWithChildren, type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
   AssistantRuntimeProvider,
@@ -28,13 +30,13 @@ import { isValidHref } from '@/lib/utils'
 
 type AdminAiAssistantThreadProps = {
   includeProtected?: boolean
-  threadId: string
   model: string
   initialHistory?: Array<{
     role: 'user' | 'assistant'
     content: string
   }>
-  onPersisted?: (messages: Array<{ role: 'user' | 'assistant'; content: string }>) => void
+  onMessagesChange?: (messages: Array<{ role: 'user' | 'assistant'; content: string }>) => void
+  onRunningChange?: (running: boolean) => void
 }
 
 type ToolCallState = {
@@ -570,20 +572,15 @@ function toInitialThreadMessages(
 }
 
 export function AdminAiAssistantThread({
-  includeProtected = false,
-  threadId,
+  includeProtected = true,
   model,
   initialHistory = [],
-  onPersisted,
+  onMessagesChange,
+  onRunningChange,
 }: AdminAiAssistantThreadProps) {
-  const safeThreadId = threadId.trim()
   const initialMessages = useMemo(() => toInitialThreadMessages(initialHistory), [initialHistory])
   const [approvedToolKeys, setApprovedToolKeys] = useState<string[]>([])
   const [defaultAvatarUrl, setDefaultAvatarUrl] = useState('')
-
-  useEffect(() => {
-    setApprovedToolKeys([])
-  }, [safeThreadId])
 
   useEffect(() => {
     let active = true
@@ -637,167 +634,160 @@ export function AdminAiAssistantThread({
   const modelAdapter = useMemo<ChatModelAdapter>(
     () => ({
       async *run({ messages, abortSignal }) {
-        const input = buildChatInputFromMessages(messages)
-        const response = await fetch('/api/admin/ai/chat/stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: input.question,
-            history: input.history,
-            includeProtected,
-            model,
-            approvedToolKeys,
-          }),
-          signal: abortSignal,
-        })
+        onRunningChange?.(true)
+        try {
+          const input = buildChatInputFromMessages(messages)
+          const response = await fetch('/api/admin/ai/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: input.question,
+              history: input.history,
+              includeProtected,
+              model,
+              approvedToolKeys,
+            }),
+            signal: abortSignal,
+          })
 
-        if (!response.ok) {
-          const errorPayload = await response.json().catch(() => null)
-          const message =
-            errorPayload &&
-            typeof errorPayload === 'object' &&
-            typeof (errorPayload as { error?: unknown }).error === 'string'
-              ? (errorPayload as { error: string }).error
-              : 'AI 对话失败'
-          throw new Error(normalizeRunErrorMessage(message))
-        }
-
-        if (!response.body) {
-          throw new Error('流式响应不可用')
-        }
-
-        let text = ''
-        let reasoningText = ''
-        let completed = false
-        const toolCalls = new Map<string, ToolCallState>()
-
-        for await (const event of iterateSseStream(response.body)) {
-          const data = asRecord(event.data)
-
-          if (event.event === 'token') {
-            const token = typeof data.token === 'string' ? data.token : ''
-            if (!token) continue
-            text += token
-            yield buildRunContent({
-              text,
-              reasoningText,
-              toolCalls,
-            })
-            continue
-          }
-
-          if (event.event === 'reasoning') {
-            const reasoning = typeof data.text === 'string' ? data.text.trim() : ''
-            if (!reasoning) continue
-            reasoningText = reasoningText ? `${reasoningText}\n${reasoning}` : reasoning
-            yield buildRunContent({
-              text,
-              reasoningText,
-              toolCalls,
-            })
-            continue
-          }
-
-          if (event.event === 'tool-call') {
-            const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId : ''
-            const toolName = typeof data.toolName === 'string' ? data.toolName : 'tool'
-            if (!toolCallId) continue
-            const existing = toolCalls.get(toolCallId)
-            toolCalls.set(toolCallId, {
-              toolCallId,
-              toolName,
-              args: asRecord(data.args),
-              result: existing?.result,
-              isError: existing?.isError,
-            })
-            yield buildRunContent({
-              text,
-              reasoningText,
-              toolCalls,
-            })
-            continue
-          }
-
-          if (event.event === 'tool-result') {
-            const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId : ''
-            const toolName = typeof data.toolName === 'string' ? data.toolName : 'tool'
-            const fallbackId = toolCallId || `${toolName}-${toolCalls.size + 1}`
-            const existing = toolCalls.get(fallbackId)
-            toolCalls.set(fallbackId, {
-              toolCallId: fallbackId,
-              toolName,
-              args: existing?.args || {},
-              result: Object.prototype.hasOwnProperty.call(data, 'result')
-                ? data.result
-                : existing?.result,
-              isError:
-                data.isError === true
-                  ? true
-                  : data.isError === false
-                    ? false
-                    : existing?.isError,
-            })
-            yield buildRunContent({
-              text,
-              reasoningText,
-              toolCalls,
-            })
-            continue
-          }
-
-          if (event.event === 'done') {
-            completed = true
-            const answer = typeof data.answer === 'string' ? data.answer.trim() : ''
-            const citations = parseCitations(data.citations)
-            text = answer || text
-            text += formatCitationsAsMarkdown(citations)
-
-            const persistedMessages = [
-              ...input.history,
-              {
-                role: 'user' as const,
-                content: input.question,
-              },
-              {
-                role: 'assistant' as const,
-                content: text,
-              },
-            ]
-
-            if (safeThreadId) {
-              void fetch(`/api/admin/ai/threads/${encodeURIComponent(safeThreadId)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  model,
-                  messages: persistedMessages,
-                }),
-              }).catch(() => {
-                // noop
-              })
-            }
-            onPersisted?.(persistedMessages)
-
-            yield buildRunContent({
-              text,
-              reasoningText,
-              toolCalls,
-            })
-            break
-          }
-
-          if (event.event === 'error') {
-            const message = typeof data.error === 'string' ? data.error : 'AI 对话失败'
+          if (!response.ok) {
+            const errorPayload = await response.json().catch(() => null)
+            const message =
+              errorPayload &&
+              typeof errorPayload === 'object' &&
+              typeof (errorPayload as { error?: unknown }).error === 'string'
+                ? (errorPayload as { error: string }).error
+                : 'AI 对话失败'
             throw new Error(normalizeRunErrorMessage(message))
           }
-        }
 
-        if (!completed && !text.trim()) {
-          throw new Error('流式响应提前结束')
+          if (!response.body) {
+            throw new Error('流式响应不可用')
+          }
+
+          let text = ''
+          let reasoningText = ''
+          let completed = false
+          const toolCalls = new Map<string, ToolCallState>()
+
+          for await (const event of iterateSseStream(response.body)) {
+            const data = asRecord(event.data)
+
+            if (event.event === 'token') {
+              const token = typeof data.token === 'string' ? data.token : ''
+              if (!token) continue
+              text += token
+              yield buildRunContent({
+                text,
+                reasoningText,
+                toolCalls,
+              })
+              continue
+            }
+
+            if (event.event === 'reasoning') {
+              const reasoning = typeof data.text === 'string' ? data.text.trim() : ''
+              if (!reasoning) continue
+              reasoningText = reasoningText ? `${reasoningText}\n${reasoning}` : reasoning
+              yield buildRunContent({
+                text,
+                reasoningText,
+                toolCalls,
+              })
+              continue
+            }
+
+            if (event.event === 'tool-call') {
+              const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId : ''
+              const toolName = typeof data.toolName === 'string' ? data.toolName : 'tool'
+              if (!toolCallId) continue
+              const existing = toolCalls.get(toolCallId)
+              toolCalls.set(toolCallId, {
+                toolCallId,
+                toolName,
+                args: asRecord(data.args),
+                result: existing?.result,
+                isError: existing?.isError,
+              })
+              yield buildRunContent({
+                text,
+                reasoningText,
+                toolCalls,
+              })
+              continue
+            }
+
+            if (event.event === 'tool-result') {
+              const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId : ''
+              const toolName = typeof data.toolName === 'string' ? data.toolName : 'tool'
+              const fallbackId = toolCallId || `${toolName}-${toolCalls.size + 1}`
+              const existing = toolCalls.get(fallbackId)
+              toolCalls.set(fallbackId, {
+                toolCallId: fallbackId,
+                toolName,
+                args: existing?.args || {},
+                result: Object.prototype.hasOwnProperty.call(data, 'result')
+                  ? data.result
+                  : existing?.result,
+                isError:
+                  data.isError === true
+                    ? true
+                    : data.isError === false
+                      ? false
+                      : existing?.isError,
+              })
+              yield buildRunContent({
+                text,
+                reasoningText,
+                toolCalls,
+              })
+              continue
+            }
+
+            if (event.event === 'done') {
+              completed = true
+              const answer = typeof data.answer === 'string' ? data.answer.trim() : ''
+              const citations = parseCitations(data.citations)
+              text = answer || text
+              text += formatCitationsAsMarkdown(citations)
+
+              const persistedMessages = [
+                ...input.history,
+                {
+                  role: 'user' as const,
+                  content: input.question,
+                },
+                {
+                  role: 'assistant' as const,
+                  content: text,
+                },
+              ]
+
+              onMessagesChange?.(persistedMessages)
+
+              yield buildRunContent({
+                text,
+                reasoningText,
+                toolCalls,
+              })
+              break
+            }
+
+            if (event.event === 'error') {
+              const message = typeof data.error === 'string' ? data.error : 'AI 对话失败'
+              throw new Error(normalizeRunErrorMessage(message))
+            }
+          }
+
+          if (!completed && !text.trim()) {
+            throw new Error('流式响应提前结束')
+          }
+        } finally {
+          onRunningChange?.(false)
         }
       },
     }),
-    [approvedToolKeys, includeProtected, model, onPersisted, safeThreadId]
+    [approvedToolKeys, includeProtected, model, onMessagesChange, onRunningChange]
   )
 
   const runtime = useLocalRuntime(modelAdapter, {

@@ -31,7 +31,7 @@ export function revalidateForUpdatedSettings(keys: Iterable<string>) {
   }
 
   for (const key of updatedKeys) {
-    revalidateTag(getSettingCacheTag(key), 'max')
+    revalidateTag(getSettingCacheTag(key), { expire: 0 })
   }
 
   if (hasAnyKey(updatedKeys, LAYOUT_SETTING_KEYS)) {
@@ -48,7 +48,7 @@ export function revalidateForUpdatedSettings(keys: Iterable<string>) {
 }
 
 export function revalidateAllPublicSettings() {
-  revalidateTag(ALL_SETTINGS_CACHE_TAG, 'max')
+  revalidateTag(ALL_SETTINGS_CACHE_TAG, { expire: 0 })
   revalidatePath('/', 'layout')
   revalidatePath('/', 'page')
   revalidatePath('/about', 'page')

@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { after, NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -33,7 +34,7 @@ export async function PATCH(
     }
 
     const { id } = await params
-    const body = await request.json()
+    const body = await readJsonBody(request)
     const { status } = body
 
     if (typeof status !== 'string' || !ALLOWED_COMMENT_STATUS.includes(status as AllowedCommentStatus)) {
@@ -146,6 +147,7 @@ export async function PATCH(
 
     return NextResponse.json({ comment })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('更新评论失败:', error)
     return NextResponse.json({ error: '更新评论失败' }, { status: 500 })
   }
@@ -171,6 +173,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('删除评论失败:', error)
     return NextResponse.json({ error: '删除评论失败' }, { status: 500 })
   }

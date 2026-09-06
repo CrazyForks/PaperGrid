@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { EmailServiceError, sendEmailTestNotification } from '@/lib/notifications/email-service'
@@ -10,7 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const body = await request.json().catch(() => ({} as Record<string, unknown>))
+    const body = await readJsonBody(request)
     const title = typeof body.title === 'string' && body.title.trim()
       ? body.title.trim()
       : '测试邮件 - 执笔为剑'
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('邮件测试发送失败:', error)
     if (error instanceof EmailServiceError) {
       return NextResponse.json({ error: error.message }, { status: error.status })

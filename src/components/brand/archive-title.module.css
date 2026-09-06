@@ -1,0 +1,93 @@
+.frame {
+  display: block;
+  container-type: inline-size;
+  width: 100%;
+  max-width: 640px;
+}
+.title {
+  display: block;
+  --logo-blue: #128afa;
+  --logo-ink: #2b2b2b;
+  margin: 0;
+  padding: 1.05em 0.25em 0.12em;
+  font-family: 'Noto Sans SC Variable', 'Arial Black', sans-serif;
+  font-size: min(72px, var(--title-size));
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: -0.055em;
+  white-space: pre;
+  isolation: isolate;
+}
+.left,
+.word {
+  display: inline-block;
+  transform: skewX(-21.8deg);
+  transform-origin: center;
+}
+.left {
+  color: var(--logo-blue);
+}
+.right {
+  position: relative;
+  display: inline-block;
+  color: var(--logo-ink);
+}
+.word {
+  position: relative;
+  z-index: 1;
+  -webkit-text-stroke: 0.11em var(--hero-bg, var(--card));
+  paint-order: stroke fill;
+}
+.halo,
+.cross {
+  position: absolute;
+  left: -1.16em;
+  top: var(--logo-ornament-y, -1.3em);
+  width: 2.98em;
+  height: 2.98em;
+  pointer-events: none;
+  overflow: visible;
+}
+.halo {
+  fill: var(--logo-ink);
+}
+.cross {
+  z-index: 2;
+  fill: var(--logo-blue);
+}
+.cross path {
+  stroke: var(--hero-bg, var(--card));
+  stroke-width: 9px;
+  paint-order: stroke fill;
+}
+.title[data-stacked] {
+  white-space: pre-wrap;
+}
+.title[data-stacked] > .left {
+  display: block;
+  width: fit-content;
+}
+.title[data-stacked] > .right {
+  margin-top: 0.9em;
+  margin-left: 0.18em;
+}
+:global(.dark) .title {
+  --logo-blue: #58bcff;
+  --logo-ink: #e5eff7;
+}
+@media (max-width: 640px) {
+  .title {
+    font-size: min(52px, var(--title-size));
+  }
+}
+
+.compact .title {
+  --logo-ornament-y: -0.95em;
+  padding: 0 0.25em;
+  font-size: min(20px, var(--title-size));
+}
+@media (max-width: 767px) {
+  .compact .title {
+    font-size: min(17px, var(--title-size));
+  }
+}

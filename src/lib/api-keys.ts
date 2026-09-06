@@ -10,18 +10,8 @@ const API_KEY_INVALID_MAX = 60
 const API_KEY_USAGE_WINDOW_MS = 60 * 1000
 const API_KEY_USAGE_MAX = 120
 
-export type ApiKeyPermission =
-  | 'POST_CREATE'
-  | 'POST_UPDATE'
-  | 'POST_DELETE'
-  | 'POST_READ'
-
-export const API_KEY_PERMISSION_LIST: ApiKeyPermission[] = [
-  'POST_CREATE',
-  'POST_UPDATE',
-  'POST_DELETE',
-  'POST_READ',
-]
+import { API_KEY_PERMISSIONS, API_KEY_PERMISSION_LIST, type ApiKeyPermission } from './api-key-permissions'
+export { API_KEY_PERMISSION_LIST, type ApiKeyPermission } from './api-key-permissions'
 
 export function generateApiKey(): string {
   const raw = crypto.randomBytes(32).toString('base64url')
@@ -98,7 +88,7 @@ export async function requireApiKey(
     }
   }
 
-  if (!rawKey.startsWith(API_KEY_PREFIX)) {
+  if (!/^eak_[A-Za-z0-9_-]{43}$/.test(rawKey)) {
     const invalidLimit = rateLimit(`api-key:invalid:${clientIp}`, {
       windowMs: API_KEY_INVALID_WINDOW_MS,
       max: API_KEY_INVALID_MAX,
@@ -138,6 +128,19 @@ export async function requireApiKey(
     }
   }
 
+  // Reject orphaned legacy keys too, even if they were left enabled in the DB.
+  const creator = apiKey.createdById
+    ? await prisma.user.findUnique({ where: { id: apiKey.createdById }, select: { role: true } })
+    : null
+  if (creator?.role !== 'ADMIN') {
+    return {
+      ok: false,
+      status: 401,
+      error: 'API Key 创建者已失去管理员权限，请重新创建密钥',
+      headers: rateLimitHeaders(attemptLimit),
+    }
+  }
+
   if (apiKey.expiresAt && apiKey.expiresAt <= new Date()) {
     return {
       ok: false,
@@ -171,10 +174,12 @@ export async function requireApiKey(
     }
   }
 
-  await prisma.apiKey.update({
-    where: { id: apiKey.id },
-    data: { lastUsedAt: new Date(), lastUsedIp: clientIp },
-  })
+  if (!apiKey.lastUsedAt || Date.now() - apiKey.lastUsedAt.getTime() > 60000) {
+    await prisma.apiKey.updateMany({
+      where: { id: apiKey.id, OR: [{ lastUsedAt: null }, { lastUsedAt: { lt: new Date(Date.now() - 60000) } }] },
+      data: { lastUsedAt: new Date(), lastUsedIp: clientIp },
+    })
+  }
 
   return {
     ok: true,
@@ -184,10 +189,5 @@ export async function requireApiKey(
 }
 
 export function getPermissionLabels() {
-  return {
-    POST_READ: '查询文章',
-    POST_CREATE: '增加文章',
-    POST_UPDATE: '修改文章',
-    POST_DELETE: '删除文章',
-  } as Record<ApiKeyPermission, string>
+  return Object.fromEntries(API_KEY_PERMISSIONS.map(item => [item.value, item.label])) as Record<ApiKeyPermission, string>
 }

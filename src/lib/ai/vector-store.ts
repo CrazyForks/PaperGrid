@@ -197,7 +197,7 @@ function resolveSqliteDatabasePath() {
     return decodedPath
   }
 
-  const rootResolved = path.resolve(process.cwd(), decodedPath)
+  const rootResolved = path.resolve(/* turbopackIgnore: true */ process.cwd(), decodedPath)
   const prismaResolved = path.resolve(process.cwd(), 'prisma', decodedPath)
 
   if (existsSync(prismaResolved)) {
@@ -281,7 +281,7 @@ function resolveSqliteVecExtensionPathFromPackage() {
 
   const envPath = (process.env.SQLITE_VEC_EXTENSION_PATH || '').trim()
   if (envPath) {
-    const envResolved = path.isAbsolute(envPath) ? envPath : path.resolve(cwd, envPath)
+    const envResolved = path.isAbsolute(envPath) ? envPath : path.resolve(/* turbopackIgnore: true */ cwd, envPath)
     const suffix = `.${resolveSqliteVecExtensionSuffix()}`
     appendPathCandidate(candidates, envResolved)
     if (!envResolved.endsWith(suffix)) {
@@ -642,7 +642,7 @@ function ensureVectorSchema(db: VectorDatabase, options: OpenVectorDatabaseOptio
     }
 
     if (currentDimension !== expectedDimension) {
-      if (!options.resetOnDimensionMismatch) {
+      if (!options.resetOnDimensionMismatch && Number(db.prepare('SELECT COUNT(*) AS n FROM ai_chunks').get()?.n || 0) > 0) {
         throw new Error(
           `向量维度不一致：当前索引维度 ${currentDimension}，请求维度 ${expectedDimension}，请先重建索引。`
         )
@@ -694,7 +694,8 @@ async function openVectorDatabase(options: OpenVectorDatabaseOptions = {}): Prom
     }
 
     db.exec('PRAGMA foreign_keys = ON')
-    db.exec('PRAGMA busy_timeout = 5000')
+    db.exec('PRAGMA busy_timeout = 250')
+    db.exec('PRAGMA cache_size = -2048')
 
     const dimension = ensureVectorSchema(db, options)
 
@@ -782,20 +783,23 @@ async function indexPostRecord(
     }
   }
 
-  const checksum = buildPostChecksum(post)
+  const checksum = sha256(`${buildPostChecksum(post)}:${context.settings.baseUrl}:${context.settings.embeddingModel}:${context.settings.embeddingDimensions}`)
+  const probe = context.dbContext || await openVectorDatabase()
+  try {
+    const existing = probe.db.prepare('SELECT status, content_checksum AS checksum, chunk_count AS count FROM ai_documents WHERE post_id = ?').get(post.id)
+    if (existing?.status === 'indexed' && existing.checksum === checksum) {
+      return { postId: post.id, status: 'unchanged', chunkCount: toNumberOrZero(existing.count) }
+    }
+  } finally { if (!context.dbContext) closeQuietly(probe.db) }
   const chunks = buildPostChunks(post)
   const embeddingInputs = chunks.map((item) => item.embeddingInput)
 
-  const vectors =
-    embeddingInputs.length > 0
-      ? normalizeEmbeddingMatrix(
-          await runOpenAiCompatibleEmbeddings({
-            texts: embeddingInputs,
-            settings: context.settings,
-          }),
-          '索引 embedding'
-        )
-      : []
+  const vectors: number[][] = []
+  for (let start = 0; start < embeddingInputs.length; start += 16) {
+    vectors.push(...normalizeEmbeddingMatrix(await runOpenAiCompatibleEmbeddings({
+      texts: embeddingInputs.slice(start, start + 16), settings: context.settings,
+    }), '索引 embedding'))
+  }
 
   if (vectors.length !== embeddingInputs.length) {
     throw new Error(
@@ -816,7 +820,7 @@ async function indexPostRecord(
   if (!dbContext) {
     dbContext = await openVectorDatabase({
       dimensions: vectorDimension,
-      resetOnDimensionMismatch: true,
+      resetOnDimensionMismatch: false,
     })
   } else if (dbContext.dimension !== vectorDimension) {
     throw new Error(
@@ -853,6 +857,8 @@ async function indexPostRecord(
         .prepare('DELETE FROM ai_chunk_vectors WHERE chunk_id IN (SELECT id FROM ai_chunks WHERE post_id = ?)')
         .run(post.id)
       db.prepare('DELETE FROM ai_chunks WHERE post_id = ?').run(post.id)
+
+      db.prepare('INSERT OR IGNORE INTO ai_documents (post_id, status, updated_at, chunk_count) VALUES (?, ?, ?, ?)').run(post.id, 'indexing', timestamp, 0)
 
       const insertChunkStmt = db.prepare(
         `
@@ -1135,7 +1141,7 @@ export async function rebuildAllPostIndex(): Promise<AiRebuildIndexResult> {
             }
           } catch (error) {
             failed += 1
-            errors.push({
+            if (errors.length < 80) errors.push({
               postId: post.id,
               error: error instanceof Error ? error.message : '重建索引失败',
             })

@@ -1,0 +1,172 @@
+.startup {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fff url('/assets/blue-archive/loading-desktop.webp') center / cover;
+  color: #1289f9;
+  /* Also reveal server-rendered content if application JavaScript fails to start. */
+  animation: failOpen 0s 10s forwards !important;
+  transition: opacity 240ms ease;
+}
+.startup[data-done] {
+  opacity: 0;
+  pointer-events: none;
+}
+.avatar {
+  width: clamp(140px, 13vw, 210px);
+  aspect-ratio: 250 / 334;
+  margin-bottom: 22px;
+  animation: bounce 500ms ease-in infinite alternate;
+}
+.avatar > div {
+  width: 100%;
+  height: 100%;
+  background: url('/assets/blue-archive/arona-loading.webp') left top / 400% 100% no-repeat;
+  animation: expressions 4s steps(1) infinite;
+}
+.connecting {
+  font:
+    italic 800 clamp(23px, 2.2vw, 32px) / 1.3 var(--font-geist-sans),
+    sans-serif;
+  letter-spacing: -0.04em;
+}
+.progress {
+  width: 160px;
+  height: 4px;
+  margin-top: 18px;
+  overflow: hidden;
+  background: #1289f91a;
+  transform: skewX(-15deg);
+}
+.progress > span {
+  display: block;
+  height: 100%;
+  background: currentColor;
+  transform-origin: left;
+  transition: transform 180ms ease-out;
+}
+.percent {
+  margin-top: 10px;
+  font:
+    700 18px / 1.4 var(--font-geist-mono),
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+.skip {
+  position: absolute;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  min-height: 44px;
+  padding: 10px 18px;
+  color: #627e8d;
+  font-size: 12px;
+  cursor: pointer;
+}
+.skip:hover {
+  color: #1289f9;
+}
+.skip:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+.triangles {
+  display: inline-block;
+  width: 30px;
+  height: 27px;
+  flex-shrink: 0;
+  color: #1289f9;
+  overflow: visible;
+  vertical-align: middle;
+}
+.triangles path {
+  fill: currentColor;
+  opacity: 0.2;
+  animation: flash 1.2s ease-in-out infinite;
+}
+.triangles path:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.triangles path:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.triangles path:nth-child(4) {
+  animation-delay: 0.45s;
+}
+.route {
+  min-height: calc(100svh - var(--site-nav-height));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.route .triangles {
+  width: 56px;
+  height: 49px;
+}
+@keyframes bounce {
+  from {
+    transform: translateY(-20px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes expressions {
+  0%,
+  100% {
+    background-position-x: 0%;
+  }
+  25% {
+    background-position-x: 33.3333%;
+  }
+  50% {
+    background-position-x: 66.6667%;
+  }
+  75% {
+    background-position-x: 100%;
+  }
+}
+@keyframes flash {
+  0%,
+  65%,
+  100% {
+    opacity: 0.15;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+@keyframes failOpen {
+  to {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+@media (max-width: 767px) {
+  .startup {
+    background-image: url('/assets/blue-archive/loading-mobile.webp');
+  }
+  .avatar {
+    width: 165px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatar,
+  .avatar > div,
+  .triangles path {
+    animation: none;
+  }
+  .triangles path {
+    opacity: 0.65;
+  }
+  .startup,
+  .progress > span {
+    transition: none;
+  }
+}

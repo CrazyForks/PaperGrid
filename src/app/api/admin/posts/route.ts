@@ -1,3 +1,4 @@
+import { pageNumber } from '@/lib/pagination'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -31,10 +32,6 @@ const postListSelect = {
   },
 } satisfies Prisma.PostSelect
 
-function normalizePage(value: string | null): number {
-  const page = Number.parseInt(value || '1', 10)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
 
 function normalizeLimit(value: string | null): number {
   const parsed = Number.parseInt(value || `${DEFAULT_LIMIT}`, 10)
@@ -80,7 +77,7 @@ export async function GET(request: NextRequest) {
     const q = searchParams.get('q')?.trim() || ''
     const status = searchParams.get('status') || ''
     const categoryId = searchParams.get('categoryId') || ''
-    const requestedPage = normalizePage(searchParams.get('page'))
+    const requestedPage = pageNumber(searchParams.get('page'))
     const limit = normalizeLimit(searchParams.get('limit'))
     const where = buildPostWhere(q, status, categoryId)
 

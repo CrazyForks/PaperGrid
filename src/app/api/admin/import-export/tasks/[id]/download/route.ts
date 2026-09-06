@@ -23,7 +23,9 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': artifact.mimeType,
-        'Content-Disposition': `attachment; filename="${artifact.fileName}"; filename*=UTF-8''${encoded}`,
+        'Content-Length': String(artifact.size),
+        'Cache-Control': 'private, no-store',
+        'Content-Disposition': `attachment; filename="papergrid-export"; filename*=UTF-8''${encoded}`,
       },
     })
   } catch (error) {

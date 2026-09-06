@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Copy, Eye, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Copy, FileText, Eye, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
 import Image from 'next/image'
 import { useToast } from '@/hooks/use-toast'
+import { PaginationControls } from '@/components/ui/pagination-controls'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -57,6 +58,9 @@ function formatBytes(size: number) {
 
 export default function AdminFilesPage() {
   const { toast } = useToast()
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalFiles, setTotalFiles] = useState(0)
   const [files, setFiles] = useState<MediaFile[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -70,25 +74,32 @@ export default function AdminFilesPage() {
 
   const maxUploadLabel = useMemo(() => formatBytes(maxUploadBytes), [maxUploadBytes])
 
+  const latestRequest = useRef(0)
   const loadFiles = useCallback(async () => {
+    const sequence = ++latestRequest.current
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/files?limit=100', { cache: 'no-store' })
+      const res = await fetch(`/api/admin/files?limit=24&page=${page}`, { cache: 'no-store' })
       const data = await res.json()
+      if (sequence !== latestRequest.current) return
       if (!res.ok) {
         throw new Error(data.error || '加载文件失败')
       }
+      if (page > (data.pagination?.totalPages || 1)) { setPage(data.pagination?.totalPages || 1); return }
       setFiles(data.files || [])
+      setTotalPages(data.pagination?.totalPages || 1)
+      setTotalFiles(data.pagination?.total || 0)
       if (typeof data?.limits?.maxUploadBytes === 'number') {
         setMaxUploadBytes(data.limits.maxUploadBytes)
       }
     } catch (error) {
+      if (sequence !== latestRequest.current) return
       console.error('加载文件失败:', error)
       toast({ title: '错误', description: '加载文件失败', variant: 'destructive' })
     } finally {
-      setLoading(false)
+      if (sequence === latestRequest.current) setLoading(false)
     }
-  }, [toast])
+  }, [toast, page])
 
   useEffect(() => {
     loadFiles()
@@ -96,7 +107,7 @@ export default function AdminFilesPage() {
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      toast({ title: '提示', description: '请先选择图片', variant: 'destructive' })
+      toast({ title: '提示', description: '请先选择文件', variant: 'destructive' })
       return
     }
 
@@ -126,8 +137,9 @@ export default function AdminFilesPage() {
         input.value = ''
       }
 
-      toast({ title: '成功', description: '图片上传成功' })
-      setFiles((prev) => [data.file, ...prev])
+      toast({ title: '成功', description: '文件上传成功' })
+      if (page === 1) await loadFiles()
+      else setPage(1)
     } catch (error) {
       console.error('上传失败:', error)
       toast({
@@ -176,7 +188,8 @@ export default function AdminFilesPage() {
         throw new Error(data.error || '删除失败')
       }
 
-      setFiles((prev) => prev.filter((item) => item.id !== file.id))
+      if (files.length === 1 && page > 1) setPage(page - 1)
+      else await loadFiles()
       toast({ title: '成功', description: '文件已删除' })
     } catch (error) {
       console.error('删除失败:', error)
@@ -211,16 +224,16 @@ export default function AdminFilesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>上传图片</CardTitle>
+          <CardTitle>上传文件</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="upload-file-input">选择图片</Label>
+              <Label htmlFor="upload-file-input">选择文件</Label>
               <Input
                 id="upload-file-input"
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/avif"
+                accept="image/jpeg,image/png,image/webp,image/avif,application/pdf,application/zip"
                 onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                 disabled={uploading}
               />
@@ -244,32 +257,33 @@ export default function AdminFilesPage() {
 
           <Button onClick={handleUpload} disabled={uploading || !selectedFile}>
             {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-            {uploading ? '上传中...' : '上传图片'}
+            {uploading ? '上传中...' : '上传文件'}
           </Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>图片列表（{files.length}）</CardTitle>
+          <CardTitle>文件列表（{totalFiles}）</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="py-10 text-center text-muted-foreground">加载中...</div>
           ) : files.length === 0 ? (
-            <div className="py-10 text-center text-muted-foreground">暂无文件，先上传一张图片吧。</div>
+            <div className="py-10 text-center text-muted-foreground">暂无文件，先上传图片或附件吧。</div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {files.map((file) => (
                 <div key={file.id} className="overflow-hidden rounded-lg border bg-card">
                   <div className="relative aspect-video overflow-hidden bg-gray-100 dark:bg-gray-900">
-                    <Image
+                    {file.mimeType.startsWith('image/') ? <Image
+                      unoptimized
                       src={file.url}
                       alt={file.originalName}
                       fill
                       sizes="(min-width: 1280px) 33vw, (min-width: 640px) 50vw, 100vw"
                       className="object-cover"
-                    />
+                    /> : <div className="flex h-full items-center justify-center gap-3 text-muted-foreground"><FileText size={32} /><span>{file.ext.toUpperCase()}</span></div>}
                   </div>
                   <div className="space-y-2 p-3">
                     <p className="line-clamp-1 text-sm font-medium" title={file.originalName}>
@@ -325,6 +339,8 @@ export default function AdminFilesPage() {
           )}
         </CardContent>
       </Card>
+
+      <PaginationControls page={page} totalPages={totalPages} onChange={setPage} disabled={loading} />
 
       <AlertDialog open={inUseDialogOpen} onOpenChange={setInUseDialogOpen}>
         <AlertDialogContent>

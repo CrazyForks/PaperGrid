@@ -22,7 +22,7 @@ export async function getPublicCategories(limit?: number) {
         include: {
           _count: {
             select: {
-              posts: true,
+              posts: { where: { status: 'PUBLISHED' } },
             },
           },
         },

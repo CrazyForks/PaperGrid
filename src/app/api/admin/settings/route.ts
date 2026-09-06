@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
@@ -7,7 +8,6 @@ import {
   DEFAULT_PUBLIC_STYLE_PRESET,
   normalizePublicStylePreset,
 } from '@/lib/public-style-preset'
-import { normalizeMobileReadingBackground } from '@/lib/reading-style'
 import { parseHeadInjection } from '@/lib/head-inject'
 import { revalidateForUpdatedSettings } from '@/lib/settings-revalidate'
 
@@ -27,13 +27,6 @@ type AutoCreateSettingConfig = {
 }
 
 const AUTO_CREATE_SETTINGS: Record<string, AutoCreateSettingConfig> = {
-  'ui.mobileReadingBackground': {
-    value: { style: 'grid' },
-    group: 'ui',
-    editable: true,
-    secret: false,
-    description: '移动端阅读背景样式',
-  },
   'ui.publicStylePreset': {
     value: { preset: DEFAULT_PUBLIC_STYLE_PRESET },
     group: 'ui',
@@ -158,11 +151,6 @@ function normalizeSettingUpdateValue(key: string, value: Prisma.InputJsonValue):
     return { preset: normalizePublicStylePreset(rawPreset) }
   }
 
-  if (key === 'ui.mobileReadingBackground') {
-    const rawStyle = readStringValue(['style', 'value', 'text'])
-    return { style: normalizeMobileReadingBackground(rawStyle) }
-  }
-
   if (key === 'site.customHeadCode') {
     const rawText = readStringValue(['text', 'value'])
     const text = typeof rawText === 'string' ? rawText.slice(0, 4096) : ''
@@ -188,7 +176,7 @@ export async function GET() {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const settings = await prisma.setting.findMany({ orderBy: { group: 'asc' } })
+    const settings = await prisma.setting.findMany({ where: { NOT: { key: { startsWith: 'ai.thread.' } } }, orderBy: { group: 'asc' } })
     const defaultAdmin = await isDefaultAdmin()
 
     // 转换为前端易用格式
@@ -233,6 +221,7 @@ export async function GET() {
 
     return NextResponse.json({ settings: payload })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('获取设置失败:', error)
     return NextResponse.json({ error: '获取设置失败' }, { status: 500 })
   }
@@ -246,7 +235,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const body = await request.json()
+    const body = await readJsonBody(request)
     const updates: Array<{ key: string; value: Prisma.InputJsonValue }> = body.updates || []
 
     if (!Array.isArray(updates) || updates.length === 0) {
@@ -293,6 +282,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ results })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('更新设置失败:', error)
     if (error instanceof SettingsValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 })

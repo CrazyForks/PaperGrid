@@ -1,3 +1,5 @@
+import type { Prisma } from '@prisma/client'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -11,8 +13,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const body = await request.json()
-    const currentPassword = String(body.currentPassword || '').trim()
+    const body = await readJsonBody(request)
+    const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : ''
     const newEmail = String(body.newEmail || '').trim()
     const newPassword = String(body.newPassword || '')
     const confirmPassword = String(body.confirmPassword || '')
@@ -38,7 +40,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: '当前密码不正确' }, { status: 400 })
     }
 
-    const data: Record<string, any> = {}
+    const data: Prisma.UserUpdateInput = {}
 
     if (newEmail && newEmail !== user.email) {
       const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)
@@ -53,8 +55,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (newPassword) {
-      if (newPassword.length < 6) {
-        return NextResponse.json({ error: '新密码至少 6 位' }, { status: 400 })
+      if (newPassword.length < 12 || Buffer.byteLength(newPassword) > 72) {
+        return NextResponse.json({ error: '新密码至少 12 位且不能超过 72 字节' }, { status: 400 })
       }
       if (newPassword !== confirmPassword) {
         return NextResponse.json({ error: '两次输入的新密码不一致' }, { status: 400 })
@@ -68,7 +70,7 @@ export async function PATCH(request: NextRequest) {
 
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data,
+      data: { ...data, sessionVersion: { increment: 1 } },
       select: { id: true, email: true, name: true },
     })
 
@@ -80,6 +82,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ user: updated })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('更新管理员账号失败:', error)
     return NextResponse.json({ error: '更新失败' }, { status: 500 })
   }

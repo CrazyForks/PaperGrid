@@ -1,13 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, File, Folder, Tag as TagIcon, X, Lock } from 'lucide-react'
+import { TriangleLoader } from '@/components/loading/triangle-loader'
+import { Search, FileText, Folder, Hash, X, Lock, ArrowUpRight } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
 
 interface SearchResult {
   type: 'post' | 'category' | 'tag'
@@ -17,391 +14,252 @@ interface SearchResult {
   excerpt?: string
   url: string
   postCount?: number
-  tags?: string[]
   category?: string
-  description?: string
   isProtected?: boolean
 }
-
 interface SearchResults {
-  posts: Array<SearchResult & { author?: string; publishedAt?: string }>
+  posts: SearchResult[]
   categories: SearchResult[]
   tags: SearchResult[]
-  stats: {
-    total: number
-    postsCount: number
-    categoriesCount: number
-    tagsCount: number
-  }
+  stats: { total: number; postsCount: number; categoriesCount: number; tagsCount: number }
 }
-
-interface SearchCommandProps {
+const tabs = [
+  { key: 'all', label: '全部' },
+  { key: 'posts', label: '文章' },
+  { key: 'categories', label: '分类' },
+  { key: 'tags', label: '标签' },
+] as const
+export function SearchCommand({
+  open,
+  onOpenChange,
+}: {
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-export function SearchCommand({ open, onOpenChange }: SearchCommandProps) {
+}) {
   const router = useRouter()
+  const id = useId()
+  const input = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const [results, setResults] = useState<SearchResults | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [activeTab, setActiveTab] = useState<'all' | 'posts' | 'categories' | 'tags'>('all')
-
-  // 获取所有可搜索的选项
-  const allItems = useCallback(() => {
-    if (!results || !results.posts || !results.categories || !results.tags) return []
-
-    const items: Array<{ item: SearchResult; type: string }> = []
-
-    if (activeTab === 'all' || activeTab === 'posts') {
-      results.posts.forEach((post) => {
-        items.push({ item: post, type: 'post' })
-      })
-    }
-
-    if (activeTab === 'all' || activeTab === 'categories') {
-      results.categories.forEach((cat) => {
-        items.push({ item: cat, type: 'category' })
-      })
-    }
-
-    if (activeTab === 'all' || activeTab === 'tags') {
-      results.tags.forEach((tag) => {
-        items.push({ item: tag, type: 'tag' })
-      })
-    }
-
-    return items
-  }, [results, activeTab])
-
-  // 搜索功能
-  const search = useCallback(async (searchQuery: string) => {
-    if (!searchQuery || searchQuery.trim().length < 2) {
-      setResults(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
+  const [selected, setSelected] = useState(0)
+  const [tab, setTab] = useState<(typeof tabs)[number]['key']>('all')
+  const items = useMemo(
+    () =>
+      results
+        ? tab === 'all'
+          ? [...results.posts, ...results.categories, ...results.tags]
+          : results[tab]
+        : [],
+    [results, tab]
+  )
+  useEffect(() => {
+    const controller = new AbortController()
+    setResults(null)
+    setError('')
+    setSelected(0)
+    if (!open || query.trim().length < 2) {
+      setLoading(false)
       return
     }
-
-    setIsLoading(true)
-    try {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`)
-      const data = await response.json()
-      // 合并 results 和 stats
-      setResults({ ...data.results, stats: data.stats })
-      setSelectedIndex(0)
-    } catch (error) {
-      console.error('搜索失败:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  // 防抖搜索
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      search(query)
+    setLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
+          signal: controller.signal,
+        })
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || '暂时无法搜索，请稍后重试。')
+        if (!controller.signal.aborted) setResults({ ...data.results, stats: data.stats })
+      } catch (reason) {
+        if (!controller.signal.aborted)
+          setError(reason instanceof Error ? reason.message : '搜索失败，请重试。')
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
     }, 300)
-
-    return () => clearTimeout(timeoutId)
-  }, [query, search])
-
-  // 键盘快捷键
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!open) return
-
-      // ESC 关闭
-      if (e.key === 'Escape') {
-        onOpenChange(false)
-        return
-      }
-
-      // 下移
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        const items = allItems()
-        setSelectedIndex((prev) => (prev + 1) % items.length)
-      }
-
-      // 上移
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        const items = allItems()
-        setSelectedIndex((prev) => (prev - 1 + items.length) % items.length)
-      }
-
-      // 回车选择
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        const items = allItems()
-        const selected = items[selectedIndex]
-        if (selected) {
-          router.push(selected.item.url)
-          onOpenChange(false)
-        }
-      }
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
     }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open, selectedIndex, allItems, router, onOpenChange])
-
-  // 选择结果
-  const handleSelect = (url: string) => {
-    router.push(url)
+  }, [query, open, retry])
+  useEffect(() => {
+    if (items.length)
+      document.getElementById(`${id}-result-${selected}`)?.scrollIntoView({ block: 'nearest' })
+  }, [selected, items.length, id])
+  const select = (item: SearchResult) => {
     onOpenChange(false)
+    router.push(item.url)
   }
-
-  const items = allItems()
-
+  const keydown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || !items.length) return
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setSelected(
+        (value) => (value + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length
+      )
+    } else if (event.key === 'Enter' && items[selected]) {
+      event.preventDefault()
+      select(items[selected])
+    }
+  }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden p-0 shadow-lg max-w-2xl" showCloseButton={false}>
-        <DialogTitle className="sr-only">搜索</DialogTitle>
-        <DialogDescription className="sr-only">搜索文章、分类与标签</DialogDescription>
-        <div className="flex flex-col">
-          {/* 搜索输入框 */}
-          <div className="flex items-center border-b px-4 py-3">
-            <Search className="mr-2 h-5 w-5 shrink-0 opacity-50" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索文章、分类、标签..."
-              className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-              autoFocus
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery('')
-                  setResults(null)
-                }}
-                className="ml-2 shrink-0 rounded-sm opacity-50 hover:opacity-100 transition-opacity"
-                aria-label="清空搜索"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            )}
-            <kbd className="ml-2 hidden h-5 shrink-0 select-none items-center gap-1 rounded border bg-muted px-2 text-[10px] font-medium opacity-50 sm:flex sm:text-xs">
-              <span className="text-xs">ESC</span>
-            </kbd>
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="ml-2 inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground sm:hidden"
-              aria-label="关闭搜索"
-            >
-              <X className="h-4 w-4" />
-            </button>
+      <DialogContent
+        className="ba-search-dialog max-md:translate-y-0"
+        showCloseButton={false}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          input.current?.focus()
+        }}
+      >
+        <header className="ba-search-heading">
+          <div>
+            <span>SEARCH</span>
+            <DialogTitle>搜索手记</DialogTitle>
           </div>
-
-          {/* 标签切换 */}
-          {results && results.stats.total > 0 && (
-            <div className="flex gap-2 border-b px-4 py-2">
+          <button
+            className="ba-icon-button"
+            onClick={() => onOpenChange(false)}
+            aria-label="关闭搜索"
+          >
+            <X size={21} />
+          </button>
+        </header>
+        <DialogDescription className="sr-only">
+          输入至少两个字符，搜索文章、分类和标签。方向键选择结果，回车打开。
+        </DialogDescription>
+        <div className="ba-search-field">
+          <Search size={21} />
+          <input
+            ref={input}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={keydown}
+            maxLength={100}
+            placeholder="输入文章、分类或标签…"
+            role="combobox"
+            aria-label="搜索关键词"
+            aria-expanded={items.length > 0}
+            aria-controls={`${id}-results`}
+            aria-autocomplete="list"
+            aria-activedescendant={items.length ? `${id}-result-${selected}` : undefined}
+            autoComplete="off"
+          />
+          {query && (
+            <button
+              onClick={() => {
+                setQuery('')
+                input.current?.focus()
+              }}
+              aria-label="清空关键词"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+        <div className="ba-search-tabs" aria-label="搜索范围">
+          {tabs.map((item) => (
+            <button
+              key={item.key}
+              aria-pressed={tab === item.key}
+              onClick={() => {
+                setTab(item.key)
+                setSelected(0)
+              }}
+            >
+              {item.label}
+              {results && (
+                <span>{item.key === 'all' ? results.stats.total : results[item.key].length}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="ba-search-results" aria-busy={loading}>
+          {loading && (
+            <p className="ba-search-empty" role="status">
+              <TriangleLoader />
+              正在查找…
+            </p>
+          )}
+          {!loading && error && (
+            <div className="ba-search-empty" role="alert">
+              <p>{error}</p>
               <button
-                onClick={() => setActiveTab('all')}
-                className={cn(
-                  'rounded-md px-3 py-1 text-sm font-medium transition-colors',
-                  activeTab === 'all'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )}
+                className="ba-secondary-button"
+                onClick={() => setRetry((value) => value + 1)}
               >
-                全部 ({results.stats.total})
-              </button>
-              <button
-                onClick={() => setActiveTab('posts')}
-                className={cn(
-                  'rounded-md px-3 py-1 text-sm font-medium transition-colors',
-                  activeTab === 'posts'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )}
-              >
-                文章 ({results.stats.postsCount})
-              </button>
-              <button
-                onClick={() => setActiveTab('categories')}
-                className={cn(
-                  'rounded-md px-3 py-1 text-sm font-medium transition-colors',
-                  activeTab === 'categories'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )}
-              >
-                分类 ({results.stats.categoriesCount})
-              </button>
-              <button
-                onClick={() => setActiveTab('tags')}
-                className={cn(
-                  'rounded-md px-3 py-1 text-sm font-medium transition-colors',
-                  activeTab === 'tags'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )}
-              >
-                标签 ({results.stats.tagsCount})
+                重新搜索
               </button>
             </div>
           )}
-
-          {/* 搜索结果 */}
-          <ScrollArea className="max-h-[400px]">
-            {isLoading && (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
-                  <p className="mt-4 text-sm text-muted-foreground">搜索中...</p>
-                </div>
-              </div>
-            )}
-
-            {!isLoading && query && query.trim().length >= 2 && !results && (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Search className="mb-4 h-12 w-12 text-muted-foreground" />
-                <p className="text-lg font-medium">没有找到结果</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  尝试使用不同的关键词搜索
-                </p>
-              </div>
-            )}
-
-            {!isLoading && !query && (
-              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                <Search className="mb-4 h-12 w-12 text-muted-foreground" />
-                <p className="text-lg font-medium">开始搜索</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  输入关键词搜索文章、分类或标签
-                </p>
-                <div className="mt-6 flex flex-wrap justify-center gap-2">
-                  <Badge variant="secondary" className="cursor-pointer hover:bg-accent" onClick={() => setQuery('Next.js')}>
-                    Next.js
-                  </Badge>
-                  <Badge variant="secondary" className="cursor-pointer hover:bg-accent" onClick={() => setQuery('TypeScript')}>
-                    TypeScript
-                  </Badge>
-                  <Badge variant="secondary" className="cursor-pointer hover:bg-accent" onClick={() => setQuery('Prisma')}>
-                    Prisma
-                  </Badge>
-                  <Badge variant="secondary" className="cursor-pointer hover:bg-accent" onClick={() => setQuery('React')}>
-                    React
-                  </Badge>
-                </div>
-              </div>
-            )}
-
-            {!isLoading && results && items.length > 0 && (
-              <div className="py-2">
-                {items.map(({ item, type }, index) => (
-                  <button
-                    key={`${type}-${item.slug}-${index}`}
-                    onClick={() => handleSelect(item.url)}
-                    className={cn(
-                      'flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-accent transition-colors',
-                      selectedIndex === index && 'bg-accent'
-                    )}
-                  >
-                    {/* 图标 */}
-                    <div className="shrink-0">
-                      {type === 'post' && <File className="h-5 w-5 text-blue-500" />}
-                      {type === 'category' && <Folder className="h-5 w-5 text-green-500" />}
-                      {type === 'tag' && <TagIcon className="h-5 w-5 text-orange-500" />}
-                    </div>
-
-                    {/* 内容 */}
-                    <div className="flex-1 min-w-0">
-                      {type === 'post' && (
-                        <>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {item.title}
-                          </p>
-                          {item.excerpt && (
-                            <p className="mt-1 line-clamp-1 text-xs text-gray-500 dark:text-gray-400">
-                              {item.excerpt}
-                            </p>
-                          )}
-                          <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
-                            {item.category && (
-                              <Badge variant="outline" className="text-xs">
-                                {item.category}
-                              </Badge>
-                            )}
-                            {item.isProtected && (
-                              <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                                <Lock className="h-3 w-3" />
-                                加密
-                              </Badge>
-                            )}
-                            {item.tags && item.tags.slice(0, 2).map((tag) => (
-                              <Badge key={tag} variant="secondary" className="text-xs">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        </>
-                      )}
-
-                      {type === 'category' && (
-                        <>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {item.name}
-                          </p>
-                          {item.description && (
-                            <p className="mt-1 line-clamp-1 text-xs text-gray-500 dark:text-gray-400">
-                              {item.description}
-                            </p>
-                          )}
-                          <p className="mt-1 text-xs text-gray-500">
-                            {item.postCount} 篇文章
-                          </p>
-                        </>
-                      )}
-
-                      {type === 'tag' && (
-                        <>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {item.name}
-                          </p>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {item.postCount} 篇文章
-                          </p>
-                        </>
-                      )}
-                    </div>
-
-                    {/* 类型标签 */}
-                    <Badge variant="outline" className="shrink-0 text-xs">
-                      {type === 'post' && '文章'}
-                      {type === 'category' && '分类'}
-                      {type === 'tag' && '标签'}
-                    </Badge>
-                  </button>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-
-          {/* 底部提示 */}
-          <div className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1">
-                <kbd className="h-5 rounded border bg-muted px-1.5 text-[10px]">↑↓</kbd>
-                <span>导航</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <kbd className="h-5 rounded border bg-muted px-1.5 text-[10px]">↵</kbd>
-                <span>选择</span>
-              </div>
+          {!loading && !error && query.trim().length < 2 && (
+            <div className="ba-search-empty">
+              <Search size={30} />
+              <p>想找哪篇文章？</p>
+              <small>输入至少两个字符，也可以搜索分类与标签。</small>
             </div>
-            <div className="hidden sm:flex items-center gap-1">
-              <kbd className="h-5 rounded border bg-muted px-1.5 text-[10px]">Ctrl</kbd>
-              <span>+</span>
-              <kbd className="h-5 rounded border bg-muted px-1.5 text-[10px]">K</kbd>
-              <span>打开</span>
+          )}
+          {!loading && !error && results && !items.length && (
+            <div className="ba-search-empty" role="status">
+              <p>
+                没有找到相关
+                {tabs.find((item) => item.key === tab)?.label === '全部'
+                  ? '内容'
+                  : tabs.find((item) => item.key === tab)?.label}
+              </p>
+              <small>试试更短的关键词，或切换搜索范围。</small>
             </div>
+          )}
+          <div id={`${id}-results`} role="listbox" aria-label="搜索结果">
+            {items.map((item, index) => {
+              const Icon =
+                item.type === 'post' ? FileText : item.type === 'category' ? Folder : Hash
+              return (
+                <button
+                  key={`${item.type}-${item.slug}`}
+                  id={`${id}-result-${index}`}
+                  role="option"
+                  aria-selected={selected === index}
+                  className="ba-search-result"
+                  onPointerMove={() => setSelected(index)}
+                  onClick={() => select(item)}
+                  tabIndex={-1}
+                >
+                  <span className="ba-search-result-icon">
+                    <Icon size={20} />
+                  </span>
+                  <span className="ba-search-result-copy">
+                    <strong>{item.title || item.name}</strong>
+                    {item.excerpt && <small>{item.excerpt}</small>}
+                    <span>
+                      {item.type === 'post'
+                        ? item.category || '文章'
+                        : `${item.postCount || 0} 篇文章`}
+                      {item.isProtected && (
+                        <>
+                          <Lock size={12} />
+                          加密
+                        </>
+                      )}
+                    </span>
+                  </span>
+                  <ArrowUpRight size={17} />
+                </button>
+              )
+            })}
           </div>
         </div>
+        <footer className="ba-search-footer">
+          <span>
+            <kbd>↑↓</kbd> 选择 <kbd>Enter</kbd> 打开
+          </span>
+          <span>
+            <kbd>Esc</kbd> 关闭
+          </span>
+        </footer>
       </DialogContent>
     </Dialog>
   )

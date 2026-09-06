@@ -9,7 +9,7 @@ export function AdminContentTransition({ children }: { children: ReactNode }) {
   return (
     <div
       key={pathname}
-      className="animate-page-up"
+      className="page-enter"
     >
       {children}
     </div>

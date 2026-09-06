@@ -1,3 +1,5 @@
+import { pageNumber } from '@/lib/pagination'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
@@ -34,9 +36,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const threads = await listAiThreads(session.user.id)
+    const page = pageNumber(request.nextUrl.searchParams.get('page'))
+    const threads = await listAiThreads(session.user.id, page)
     return NextResponse.json(
-      { threads },
+      { threads, page, hasMore: threads.length === 30 },
       {
         headers: {
           ...rateLimitHeaders(limitResult),
@@ -45,6 +48,7 @@ export async function GET(request: NextRequest) {
       }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('获取 AI 会话列表失败:', error)
     const message = error instanceof Error ? error.message : '获取 AI 会话列表失败'
     return NextResponse.json({ error: message }, { status: 500 })
@@ -69,7 +73,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json().catch(() => ({} as Record<string, unknown>))
+    const body = await readJsonBody(request)
     const title = typeof body.title === 'string' ? body.title : 'New Chat'
     const model = typeof body.model === 'string' ? body.model : undefined
 
@@ -88,6 +92,7 @@ export async function POST(request: NextRequest) {
       }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('创建 AI 会话失败:', error)
     const message = error instanceof Error ? error.message : '创建 AI 会话失败'
     return NextResponse.json({ error: message }, { status: 500 })

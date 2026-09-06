@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
@@ -120,6 +121,7 @@ export async function GET(request: NextRequest) {
       { headers: rateLimitHeaders(limit) }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('获取阅读量失败:', error)
     return jsonWithHeaders({ error: '获取阅读量失败' }, { status: 500 })
   }
@@ -142,7 +144,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json().catch(() => null)
+    const body = await readJsonBody(request)
     const slug = parseSlug(body?.slug)
 
     if (!slug) {
@@ -202,6 +204,7 @@ export async function POST(request: NextRequest) {
       { headers: rateLimitHeaders(limit) }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('更新阅读量失败:', error)
     return NextResponse.json({ error: '更新阅读量失败' }, { status: 500 })
   }

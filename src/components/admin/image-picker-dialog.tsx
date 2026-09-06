@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Search } from 'lucide-react'
 import Image from 'next/image'
+import { PaginationControls } from '@/components/ui/pagination-controls'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -49,29 +50,39 @@ export function ImagePickerDialog({
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalFiles, setTotalFiles] = useState(0)
   const [files, setFiles] = useState<MediaFile[]>([])
   const [query, setQuery] = useState('')
 
   const trimmedQuery = useMemo(() => query.trim(), [query])
 
+  const latestRequest = useRef(0)
   const loadFiles = useCallback(async (q = '') => {
+    const sequence = ++latestRequest.current
     setLoading(true)
     try {
-      const params = new URLSearchParams({ limit: '60' })
+      const params = new URLSearchParams({ kind: 'images', limit: '24', page: String(page) })
       if (q) params.set('q', q)
       const res = await fetch(`/api/admin/files?${params.toString()}`, { cache: 'no-store' })
       const data = await res.json()
+      if (sequence !== latestRequest.current) return
       if (!res.ok) {
         throw new Error(data.error || '加载图片失败')
       }
+      if (page > (data.pagination?.totalPages || 1)) { setPage(data.pagination?.totalPages || 1); return }
       setFiles(data.files || [])
+      setTotalPages(data.pagination?.totalPages || 1)
+      setTotalFiles(data.pagination?.total || 0)
     } catch (error) {
+      if (sequence !== latestRequest.current) return
       console.error('加载图片失败:', error)
       toast({ title: '错误', description: '加载图片失败', variant: 'destructive' })
     } finally {
-      setLoading(false)
+      if (sequence === latestRequest.current) setLoading(false)
     }
-  }, [toast])
+  }, [toast, page])
 
   useEffect(() => {
     if (!open) return
@@ -129,6 +140,7 @@ export function ImagePickerDialog({
                 <div key={file.id} className="overflow-hidden rounded-lg border bg-card">
                   <div className="relative aspect-video overflow-hidden bg-gray-100 dark:bg-gray-900">
                     <Image
+                      unoptimized
                       src={file.url}
                       alt={file.originalName}
                       fill
@@ -152,6 +164,7 @@ export function ImagePickerDialog({
           )}
         </div>
 
+        <PaginationControls page={page} totalPages={totalPages} onChange={setPage} disabled={loading} />
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
             关闭

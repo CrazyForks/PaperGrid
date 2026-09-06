@@ -12,13 +12,13 @@ export const MEDIA_MAX_UPLOAD_BYTES = Math.max(
 
 export const MEDIA_MAX_INPUT_PIXELS = Math.max(
   1_000_000,
-  Number.parseInt(process.env.MEDIA_MAX_INPUT_PIXELS || '40000000', 10) || 40_000_000
+  Number.parseInt(process.env.MEDIA_MAX_INPUT_PIXELS || '12000000', 10) || 12_000_000
 )
 
 export const MEDIA_ROOT = process.env.MEDIA_ROOT ||
   (process.env.NODE_ENV === 'production'
     ? '/data/uploads'
-    : path.join(process.cwd(), 'public', 'uploads'))
+    : path.join(process.cwd(), '.local', 'uploads'))
 
 export const MEDIA_URL_PREFIX = '/api/files'
 
@@ -49,7 +49,7 @@ export function getStoragePath(ext: string, at = new Date()) {
 
 export function resolveMediaPath(storagePath: string) {
   const safeRelative = path.posix.normalize(storagePath).replace(/^\.\/+/, '')
-  const root = path.resolve(MEDIA_ROOT)
+  const root = path.resolve(/* turbopackIgnore: true */ MEDIA_ROOT)
   const absolute = path.resolve(root, safeRelative)
 
   if (!absolute.startsWith(root + path.sep) && absolute !== root) {

@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -32,7 +33,7 @@ export async function PATCH(
     }
 
     const { id } = await params
-    const body = await request.json()
+    const body = await readJsonBody(request)
 
     const data: Prisma.ApiKeyUpdateInput = {}
 
@@ -82,6 +83,7 @@ export async function PATCH(
 
     return NextResponse.json({ apiKey })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('更新 API Key 失败:', error)
     return NextResponse.json({ error: '更新 API Key 失败' }, { status: 500 })
   }
@@ -104,6 +106,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '删除成功' })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('删除 API Key 失败:', error)
     return NextResponse.json({ error: '删除 API Key 失败' }, { status: 500 })
   }

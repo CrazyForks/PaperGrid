@@ -1,3 +1,6 @@
+import { Prisma } from '@prisma/client'
+import { validateTaxonomyInput } from '@/lib/taxonomy-input'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
@@ -16,7 +19,8 @@ export async function PATCH(
     }
 
     const { id } = await params
-    const body = await req.json()
+    const body = await readJsonBody(req)
+    validateTaxonomyInput(body, true)
     const { name, slug } = body
 
     // 检查标签是否存在
@@ -57,6 +61,10 @@ export async function PATCH(
 
     return NextResponse.json({ tag })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json({ error: '名称或 Slug 已存在' }, { status: 409 })
+    }
     console.error('更新标签失败:', error)
     return NextResponse.json({ error: '更新标签失败' }, { status: 500 })
   }
@@ -103,6 +111,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '删除成功' })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('删除标签失败:', error)
     return NextResponse.json({ error: '删除标签失败' }, { status: 500 })
   }

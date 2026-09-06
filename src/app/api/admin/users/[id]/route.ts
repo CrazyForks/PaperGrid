@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -15,7 +16,7 @@ export async function PATCH(
     }
 
     const { id } = await params
-    const body = await request.json()
+    const body = await readJsonBody(request)
     const { role } = body
 
     if (!role || !['USER', 'ADMIN'].includes(role)) {
@@ -27,19 +28,22 @@ export async function PATCH(
       return NextResponse.json({ error: '不能修改自己的角色' }, { status: 400 })
     }
 
-    const user = await prisma.user.update({
-      where: { id },
-      data: { role },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-      },
+    const user = await prisma.$transaction(async tx => {
+      const current = await tx.user.findUniqueOrThrow({ where: { id }, select: { role: true } })
+      const updated = await tx.user.update({
+        where: { id },
+        data: { role, ...(current.role !== role && { sessionVersion: { increment: 1 } }) },
+        select: { id: true, name: true, email: true, role: true },
+      })
+      if (role !== 'ADMIN') {
+        await tx.apiKey.updateMany({ where: { createdById: id }, data: { enabled: false } })
+      }
+      return updated
     })
 
     return NextResponse.json({ user })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('更新用户失败:', error)
     return NextResponse.json({ error: '更新用户失败' }, { status: 500 })
   }
@@ -64,12 +68,15 @@ export async function DELETE(
       return NextResponse.json({ error: '不能删除自己的账号' }, { status: 400 })
     }
 
-    await prisma.user.delete({
-      where: { id },
+    await prisma.$transaction(async tx => {
+      if (await tx.post.count({ where: { authorId: id } })) throw new RequestBodyError('此用户仍有文章，请先转移文章归属', 409)
+      await tx.apiKey.updateMany({ where: { createdById: id }, data: { enabled: false } })
+      await tx.user.delete({ where: { id } })
     })
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('删除用户失败:', error)
     return NextResponse.json({ error: '删除用户失败' }, { status: 500 })
   }

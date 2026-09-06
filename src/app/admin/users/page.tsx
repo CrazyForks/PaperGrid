@@ -308,8 +308,8 @@ export default function UsersAdminPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>删除用户</AlertDialogTitle>
                           <AlertDialogDescription>
-                            确定要删除用户 "{user.name || user.email}" 吗？
-                            此操作将同时删除该用户的所有文章和评论，且不可撤销。
+                            确定要删除用户「{user.name || user.email}」吗？
+                            该用户的评论将被删除。仍有文章的用户需要先转移文章归属。
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

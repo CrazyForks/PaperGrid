@@ -31,12 +31,21 @@ export function Mermaid({ content }: MermaidProps) {
         mermaidRef.current = m
         m.initialize({
           startOnLoad: false,
-          theme: 'default',
-          securityLevel: 'loose',
+          theme: 'base',
+          themeVariables: {
+            primaryColor: '#e8f7ff',
+            primaryTextColor: '#183653',
+            primaryBorderColor: '#28a8df',
+            lineColor: '#567f96',
+            secondaryColor: '#f1faff',
+            tertiaryColor: '#ffffff',
+            fontFamily: 'Noto Sans SC Variable, sans-serif',
+          },
+          securityLevel: 'strict',
           suppressErrorRendering: true,
           fontFamily: 'inherit',
           flowchart: {
-            htmlLabels: true,
+            htmlLabels: false,
             useMaxWidth: true,
           },
         })
@@ -104,14 +113,28 @@ export function Mermaid({ content }: MermaidProps) {
   }, [content, ready])
 
   if (hasError) {
-    return <div ref={ref} aria-hidden="true" className="hidden" />
+    return (
+      <div className="my-6 rounded border p-4">
+        <p className="text-muted-foreground mb-3 text-sm">图表暂时无法显示，以下是原始内容。</p>
+        <pre className="overflow-x-auto text-sm">{content}</pre>
+      </div>
+    )
   }
 
   return (
     <Dialog>
       <DialogTrigger asChild>
         <div
-          className="my-8 flex cursor-zoom-in justify-center overflow-x-auto rounded-lg bg-white p-4 grayscale transition-opacity hover:opacity-90 dark:invert"
+          className="ba-mermaid"
+          role="button"
+          tabIndex={0}
+          aria-label="放大图表"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              event.currentTarget.click()
+            }
+          }}
           ref={ref}
         />
       </DialogTrigger>

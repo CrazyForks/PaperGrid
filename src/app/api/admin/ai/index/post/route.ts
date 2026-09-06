@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { enqueuePostDeleteIndexTask, enqueuePostUpsertIndexTask } from '@/lib/ai/index-tasks'
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = (await request.json().catch(() => ({} as RequestBody))) as RequestBody
+    const body = (await readJsonBody(request)) as RequestBody
     const postId = typeof body.postId === 'string' ? body.postId.trim() : ''
     const action = typeof body.action === 'string' ? body.action.trim() : 'upsert'
 
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
       }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('提交文章索引任务失败:', error)
     const message = error instanceof Error ? error.message : '提交任务失败'
     const status = message === '任务队列已满，请稍后重试' ? 429 : 500

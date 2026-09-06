@@ -41,9 +41,10 @@ export function PostFilters({ categories, tags }: PostFiltersProps) {
 
   return (
     <div className="pg-post-filters space-y-4">
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1">
           <Input
+            aria-label="搜索文章标题或内容"
             type="search"
             placeholder="搜索文章..."
             value={search}
@@ -53,11 +54,16 @@ export function PostFilters({ categories, tags }: PostFiltersProps) {
         </div>
 
         <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="pg-post-filter-select-trigger w-full sm:w-[180px]">
+          <SelectTrigger
+            aria-label="文章分类"
+            className="pg-post-filter-select-trigger w-full sm:w-[180px]"
+          >
             <SelectValue placeholder="选择分类" />
           </SelectTrigger>
           <SelectContent className="pg-post-filter-select-content">
-            <SelectItem className="pg-post-filter-select-item" value="all">全部分类</SelectItem>
+            <SelectItem className="pg-post-filter-select-item" value="all">
+              全部分类
+            </SelectItem>
             {categories.map((cat) => (
               <SelectItem className="pg-post-filter-select-item" key={cat.slug} value={cat.slug}>
                 {cat.name} ({cat._count.posts})
@@ -67,11 +73,16 @@ export function PostFilters({ categories, tags }: PostFiltersProps) {
         </Select>
 
         <Select value={tag} onValueChange={setTag}>
-          <SelectTrigger className="pg-post-filter-select-trigger w-full sm:w-[180px]">
+          <SelectTrigger
+            aria-label="文章标签"
+            className="pg-post-filter-select-trigger w-full sm:w-[180px]"
+          >
             <SelectValue placeholder="选择标签" />
           </SelectTrigger>
           <SelectContent className="pg-post-filter-select-content">
-            <SelectItem className="pg-post-filter-select-item" value="all">全部标签</SelectItem>
+            <SelectItem className="pg-post-filter-select-item" value="all">
+              全部标签
+            </SelectItem>
             {tags.map((tag) => (
               <SelectItem className="pg-post-filter-select-item" key={tag.slug} value={tag.slug}>
                 {tag.name} ({tag._count.posts})
@@ -84,7 +95,7 @@ export function PostFilters({ categories, tags }: PostFiltersProps) {
       </div>
 
       {(category !== 'all' || tag !== 'all' || search) && (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-gray-600 dark:text-gray-400">当前筛选:</span>
           {category !== 'all' && (
             <span className="text-sm">

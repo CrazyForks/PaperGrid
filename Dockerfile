@@ -8,19 +8,21 @@ RUN apt-get update -y \
   && rm -rf /var/lib/apt/lists/*
 
 FROM base AS deps
-ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG NPM_REGISTRY=https://registry.npmjs.org
 RUN npm config set registry $NPM_REGISTRY \
   && npm i -g pnpm@9.12.3
 ENV SKIP_DB_PREPARE=1
+ENV SKIP_ADMIN_BOOTSTRAP=1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY scripts/prepare-db.mjs ./scripts/prepare-db.mjs
 RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
-ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG NPM_REGISTRY=https://registry.npmjs.org
 RUN npm config set registry $NPM_REGISTRY \
   && npm i -g pnpm@9.12.3
 ENV SKIP_DB_PREPARE=1
+ENV SKIP_ADMIN_BOOTSTRAP=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
@@ -44,7 +46,7 @@ RUN set -eu; \
   cp "$ext_path" /app/sqlite-vec-extension/vec0.so
 
 FROM base AS prisma-cli
-ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG NPM_REGISTRY=https://registry.npmjs.org
 COPY package.json ./
 RUN npm config set registry $NPM_REGISTRY \
   && mkdir -p /app/prisma-cli \
@@ -56,7 +58,9 @@ ARG APP_VERSION
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_CACHE_DIR=/data/.next-cache
+ENV NODE_OPTIONS="--max-old-space-size=160 --max-semi-space-size=2"
+ENV MALLOC_ARENA_MAX=2
+ENV DATA_DIR=/data
 ENV APP_VERSION=$APP_VERSION
 ENV SQLITE_VEC_EXTENSION_PATH=/app/sqlite-vec-extension/vec0
 
@@ -75,6 +79,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma/template.db ./prisma/templ
 COPY --from=builder --chown=nextjs:nodejs /app/prisma/schema.prisma ./prisma/schema.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma/migrations ./prisma/migrations
 COPY --from=prisma-cli --chown=nextjs:nodejs /app/prisma-cli /app/prisma-cli
+COPY --chown=nextjs:nodejs scripts/bootstrap-admin.mjs scripts/upgrade-media.mjs scripts/media-references.mjs ./scripts/
 COPY --chown=nextjs:nodejs docker/entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh \

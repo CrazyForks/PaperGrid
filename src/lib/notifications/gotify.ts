@@ -1,3 +1,4 @@
+import { publicFetch } from '@/lib/public-network'
 export type GotifyOptions = {
   url: string
   token: string
@@ -26,7 +27,7 @@ export async function sendGotifyNotification(options: GotifyOptions) {
   }
 
   const baseUrl = url.replace(/\/$/, '')
-  const endpoint = `${baseUrl}/message?token=${encodeURIComponent(token)}`
+  const endpoint = `${baseUrl}/message`
 
   const payload = {
     title,
@@ -38,10 +39,11 @@ export async function sendGotifyNotification(options: GotifyOptions) {
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   let res: Response
   try {
-    res = await fetch(endpoint, {
+    res = await publicFetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Gotify-Key': token,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,

@@ -15,10 +15,11 @@ export async function GET(request: NextRequest) {
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 10) : 5
 
     const comments = await prisma.comment.findMany({
-      where: { status: 'APPROVED', post: { isProtected: false } },
+      where: { status: 'APPROVED', post: { isProtected: false, status: 'PUBLISHED' } },
       orderBy: { createdAt: 'desc' },
       take: limit,
-      include: {
+      select: {
+        id: true, content: true, createdAt: true, authorName: true,
         author: { select: { name: true } },
         post: { select: { title: true, slug: true } },
       },

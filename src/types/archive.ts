@@ -2,6 +2,8 @@ export interface ArchivePostNode {
   id: string
   title: string
   slug: string
+  publishedAt?: string | null
+  isProtected?: boolean
 }
 
 export interface ArchiveMonthNode {

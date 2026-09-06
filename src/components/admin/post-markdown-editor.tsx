@@ -293,6 +293,7 @@ export function PostMarkdownEditor({
   const uploadSingleImage = async (file: File): Promise<UploadedImage> => {
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('visibility', 'private')
     formData.append('compressionMode', 'BALANCED')
 
     const response = await fetch('/api/admin/files', {

@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, MessageSquare, Folder, Tag as TagIcon, Eye, AlertCircle, TrendingUp } from 'lucide-react'
+import {
+  FileText,
+  MessageSquare,
+  Folder,
+  Eye,
+  AlertCircle,
+  TrendingUp,
+  PenLine,
+  ArrowUpRight,
+} from 'lucide-react'
 import Link from 'next/link'
 import { StatsCard } from '@/components/admin/stats-card'
 import { ViewsChart } from '@/components/admin/views-chart'
@@ -68,6 +77,7 @@ export default function AdminDashboardPage() {
   const fetchStats = async () => {
     try {
       setIsLoading(true)
+      setError(null)
       const response = await fetch('/api/admin/stats')
       const data = await response.json()
 
@@ -86,16 +96,16 @@ export default function AdminDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="ba-dashboard space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">仪表板</h1>
           <p className="text-muted-foreground">欢迎来到您的博客管理后台</p>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="ba-stats-grid">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i} className="animate-pulse">
               <CardContent className="p-6">
-                <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded" />
+                <div className="h-20 rounded bg-gray-200 dark:bg-gray-700" />
               </CardContent>
             </Card>
           ))}
@@ -106,16 +116,16 @@ export default function AdminDashboardPage() {
 
   if (error || !stats) {
     return (
-      <div className="space-y-6">
+      <div className="ba-dashboard space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">仪表板</h1>
           <p className="text-muted-foreground">欢迎来到您的博客管理后台</p>
         </div>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-            <p className="text-lg font-medium mb-2">加载失败</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+            <AlertCircle className="mb-4 h-12 w-12 text-red-500" />
+            <p className="mb-2 text-lg font-medium">加载失败</p>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">{error}</p>
             <Button onClick={fetchStats}>重试</Button>
           </CardContent>
         </Card>
@@ -124,21 +134,28 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ba-dashboard space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">仪表板</h1>
-        <p className="text-muted-foreground">
-          欢迎回来！这里有您的博客概览
-        </p>
-      </div>
+      <header className="ba-workspace-heading">
+        <div>
+          <h1>工作台</h1>
+        </div>
+        <Link href="/admin/posts/editor" className="schale-primary-link">
+          <PenLine size={19} />
+          新建文章
+        </Link>
+      </header>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="ba-stats-grid">
         <StatsCard
           title="总文章数"
           value={stats.posts.total}
-          change={stats.posts.thisWeek > 0 ? Math.round((stats.posts.thisWeek / stats.posts.total) * 100) : 0}
+          change={
+            stats.posts.thisWeek > 0
+              ? Math.round((stats.posts.thisWeek / stats.posts.total) * 100)
+              : 0
+          }
           icon={FileText}
           color="text-blue-600 dark:text-blue-400"
           bgColor="bg-blue-100 dark:bg-blue-900/20"
@@ -166,35 +183,27 @@ export default function AdminDashboardPage() {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatsCard
-          title="评论数"
-          value={stats.comments.total}
-          icon={MessageSquare}
-          color="text-orange-600 dark:text-orange-400"
-          bgColor="bg-orange-100 dark:bg-orange-900/20"
-        />
-        <StatsCard
-          title="待审核"
-          value={stats.comments.pending}
-          icon={AlertCircle}
-          color="text-red-600 dark:text-red-400"
-          bgColor="bg-red-100 dark:bg-red-900/20"
-        />
-        <StatsCard
-          title="分类"
-          value={stats.categories}
-          icon={Folder}
-          color="text-cyan-600 dark:text-cyan-400"
-          bgColor="bg-cyan-100 dark:bg-cyan-900/20"
-        />
-        <StatsCard
-          title="标签"
-          value={stats.tags}
-          icon={TagIcon}
-          color="text-pink-600 dark:text-pink-400"
-          bgColor="bg-pink-100 dark:bg-pink-900/20"
-        />
+      <div className="ba-work-queue">
+        <Link href="/admin/comments">
+          <MessageSquare size={21} />
+          <span>
+            评论互动
+            <small>
+              {stats.comments.total} 条评论 · {stats.comments.pending} 条待审核
+            </small>
+          </span>
+          <ArrowUpRight size={18} />
+        </Link>
+        <Link href="/admin/categories">
+          <Folder size={21} />
+          <span>
+            内容整理
+            <small>
+              {stats.categories} 个分类 · {stats.tags} 个标签
+            </small>
+          </span>
+          <ArrowUpRight size={18} />
+        </Link>
       </div>
 
       {/* Charts and Lists */}
@@ -212,13 +221,13 @@ export default function AdminDashboardPage() {
           <CardContent className="space-y-2">
             <Link
               href="/admin/posts/editor"
-              className="block w-full inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 block inline-flex w-full items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors"
             >
               写新文章
             </Link>
             <Link
               href="/admin/comments"
-              className="block w-full inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 transition-colors"
+              className="block inline-flex w-full items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
             >
               管理评论
               {stats.comments.pending > 0 && (
@@ -229,7 +238,7 @@ export default function AdminDashboardPage() {
             </Link>
             <Link
               href="/admin/categories"
-              className="block w-full inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 transition-colors"
+              className="block inline-flex w-full items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
             >
               管理分类
             </Link>

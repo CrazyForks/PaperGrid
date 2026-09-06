@@ -1,292 +1,124 @@
-'use client'
-
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { ArrowRight, Github, X, Tv, Mail, MapPin } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import Image from 'next/image'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { ArrowUpRight, Github, Mail } from 'lucide-react'
 import { isValidHref } from '@/lib/utils'
+import { AronaVisual } from './arona-visual'
+import { HeroInteraction, HeroWave } from './hero-interaction'
+import styles from './hero-section.module.css'
 
-export function HeroSection({ settings }: { settings?: Record<string, unknown> }) {
-  const [mounted, setMounted] = useState(false)
-  const [text, setText] = useState('')
-  const [index, setIndex] = useState(0)
-  const s: Record<string, unknown> = settings || {}
-  const getStr = (key: string, fallback = '') =>
-    typeof s[key] === 'string' ? (s[key] as string) : fallback
-  const getBool = (key: string, fallback = false) =>
-    typeof s[key] === 'boolean' ? (s[key] as boolean) : fallback
-
-  const defaultTitles = [
-    '欢迎来到我的博客',
-    '探索技术的无限可能',
-    '记录成长的点点滴滴',
-    '分享代码与生活的美好'
-  ]
-  const rawTitles = getStr('hero.typingTitles')
-  const titles = rawTitles
-    ? rawTitles
-        .split(/\r?\n/)
-        .flatMap((line: string) => line.split(/[|｜]/))
-        .map((t: string) => t.trim())
-        .filter(Boolean)
-    : defaultTitles
-  const subtitle = getStr('hero.subtitle', '全栈开发者 / 开源爱好者 / 终身学习者')
-  const location = getStr('hero.location', '中国 · 热爱技术')
-  const avatarUrl = getStr('site.defaultAvatarUrl')
-  const ownerName = getStr('site.ownerName', 'ME')
-  const githubUrl = getStr('profile.contactGithub', 'https://github.com/xywml/PaperGrid').trim()
-  const xUrl = getStr('profile.contactX').trim()
-  const bilibiliUrl = getStr('profile.contactBilibili').trim()
-  const email = getStr('profile.contactEmail').trim()
-  const showGithub = getBool('profile.social.github.enabled', true) && Boolean(githubUrl) && isValidHref(githubUrl)
-  const showX = getBool('profile.social.x.enabled', true) && Boolean(xUrl) && isValidHref(xUrl)
-  const showBilibili = getBool('profile.social.bilibili.enabled', true) && Boolean(bilibiliUrl) && isValidHref(bilibiliUrl)
-  const showEmail = getBool('profile.social.email.enabled', true) && Boolean(email) && isValidHref(`mailto:${email}`)
-  const hasSocialLinks = showGithub || showX || showBilibili || showEmail
-
-  useEffect(() => {
-    // 稍微延迟一点点，确保浏览器已经渲染完毕，从而能观察到动画
-    const timer = setTimeout(() => {
-      setMounted(true)
-    }, 50)
-    return () => clearTimeout(timer)
-  }, [])
-
-  // 打字机效果
-  useEffect(() => {
-    if (!mounted) return
-
-    const currentTitle = titles[index]
-    let currentIndex = 0
-    let isDeleting = false
-    let timeout: NodeJS.Timeout
-
-    const type = () => {
-      if (isDeleting) {
-        setText(currentTitle.slice(0, currentIndex - 1))
-        currentIndex--
-      } else {
-        setText(currentTitle.slice(0, currentIndex + 1))
-        currentIndex++
-      }
-
-      const timeoutSpeed = isDeleting ? 50 : 100
-
-      if (!isDeleting && currentIndex === currentTitle.length) {
-        timeout = setTimeout(() => {
-          isDeleting = true
-          type()
-        }, 2000)
-      } else if (isDeleting && currentIndex === 0) {
-        isDeleting = false
-        setIndex((prevIndex) => (prevIndex + 1) % titles.length)
-        timeout = setTimeout(type, 500)
-      } else {
-        timeout = setTimeout(type, timeoutSpeed)
-      }
+// Official character artwork: https://bluearchive.jp/
+// © NEXON Games & Yostar. Artwork is separate from the source code license.
+// The local repaired version completes the cropped feet with GPT Image 2.
+const arona = existsSync(path.join(process.cwd(), 'public/assets/arona-repaired.webp'))
+  ? { src: '/assets/arona-repaired.webp', width: 742, height: 1666 }
+  : {
+      src: existsSync(path.join(process.cwd(), 'public/assets/arona-cutout.webp'))
+        ? '/assets/arona-cutout.webp'
+        : 'https://webusstatic.yo-star.com/bluearchive_jp_web/img/men2.db0183c0.png',
+      width: 503,
+      height: 967,
     }
 
-    type()
+// GPT Image 2 adaptation of the Arona reference; character artwork is separate from the code license.
+const touchArtwork = existsSync(path.join(process.cwd(), 'public/assets/arona-touch-eyes.webp'))
+  ? {
+      src: '/assets/arona-touch-eyes.webp',
+      width: 1254,
+      height: 1254,
+      touchX: 32.4,
+      touchY: 34.8,
+      expressions: '/assets/arona-expressions.webp',
+    }
+  : null
 
-    return () => clearTimeout(timeout)
-  }, [mounted, index])
+export function HeroSection({ settings = {} }: { settings?: Record<string, unknown> }) {
+  const str = (key: string, fallback = '') =>
+    typeof settings[key] === 'string' ? String(settings[key]) : fallback
+  const title =
+    str('hero.typingTitles', '欢迎来到我的博客')
+      .split(/[\n|｜]/)
+      .map((line) => line.trim())
+      .find(Boolean) || '欢迎来到我的博客'
+  const letters = Array.from(title)
+  const splitTitle = /[\u3400-\u9fff]/.test(title) && letters.length >= 6 && letters.length <= 18
+  const midpoint = Math.ceil(letters.length / 2)
+  const github = str('profile.contactGithub')
+  const email = str('profile.contactEmail')
 
   return (
-    <section className="relative overflow-hidden bg-transparent min-h-screen flex items-center">
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex flex-col items-center gap-8">
-          {/* 头像 */}
-          <div
-            className={`transition-all duration-1000 ease-out ${
-              mounted ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-90'
-            }`}
-          >
-              <div className="relative group">
-                <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full border-2 border-gray-900 dark:border-white p-1 overflow-hidden">
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt={ownerName || 'Avatar'}
-                    className="w-full h-full rounded-full object-cover"
-                    loading="eager"
-                    decoding="async"
-                  />
-                ) : (
-                  <div className="w-full h-full rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-4xl sm:text-5xl font-serif font-bold text-gray-900 dark:text-white">
-                    {(ownerName || 'ME').charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
-              {/* 在线状态点 */}
-              <div className="absolute bottom-2 right-2 w-6 h-6 bg-green-500 rounded-full border-4 border-white dark:border-gray-900" />
-            </div>
-          </div>
-
-          {/* 标题 - 打字机效果 */}
-          <div
-            className={`transition-all duration-1000 delay-200 ease-out ${
-              mounted ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
-            }`}
-          >
-            <h1 className="text-4xl font-serif font-bold tracking-tight text-gray-900 dark:text-white sm:text-6xl min-h-[4.5rem] sm:min-h-[5.5rem] text-center">
-              <span className="relative inline-block">
-                {text}
-                <span className="inline-block w-0.5 h-12 sm:h-16 bg-gray-900 dark:bg-white ml-1 animate-blink" />
-              </span>
-            </h1>
-          </div>
-
-          {/* 描述 */}
-          <div
-            className={`transition-all duration-1000 delay-400 ease-out ${
-              mounted ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
-            }`}
-          >
-            <p className="mx-auto max-w-2xl text-lg leading-8 text-gray-600 dark:text-gray-400">
-              {subtitle}
+    <HeroInteraction>
+      <section className={styles.hero} aria-labelledby="hero-title">
+        <div className={styles.grid} aria-hidden="true" />
+        <div className={styles.body}>
+          <div className={styles.copy}>
+            <p className={styles.eyebrow}>
+              <span aria-hidden="true" />
+              与你的日常，就是奇迹
             </p>
-          </div>
-
-          {/* 位置信息 */}
-          <div
-            className={`transition-all duration-1000 delay-500 ease-out ${
-              mounted ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
-            }`}
-          >
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-              <MapPin className="h-4 w-4" />
-              <span className="text-sm">{location}</span>
+            <h1 id="hero-title" className={styles.title}>
+              {splitTitle ? (
+                <>
+                  <span>{letters.slice(0, midpoint).join('')}</span>
+                  <span className={styles.titleAccent}>
+                    {letters.slice(midpoint).join('')}
+                    <i aria-hidden="true" />
+                  </span>
+                </>
+              ) : (
+                title
+              )}
+            </h1>
+            <p className={styles.subtitle}>
+              {str('hero.subtitle', '写代码，也记一些生活里的小事。')}
+            </p>
+            <div className={styles.actions}>
+              <a href="#latest-posts" className={styles.primary}>
+                翻开手记
+                <ArrowUpRight size={20} aria-hidden="true" />
+              </a>
+              <Link href="/about" className={styles.about}>
+                认识一下
+                <ArrowUpRight size={16} aria-hidden="true" />
+              </Link>
             </div>
+            {touchArtwork && <HeroWave />}
           </div>
 
-          {/* 按钮组 */}
-          <div
-            className={`transition-all duration-1000 delay-600 ease-out flex items-center justify-center gap-4 ${
-              mounted ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
-            }`}
-          >
-            <Link href="/posts">
-              <Button
-                size="lg"
-                className="pg-hero-btn-primary group shadow-md transition-all duration-300 hover:shadow-lg"
-              >
-                浏览文章
-                <ArrowRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
-              </Button>
-            </Link>
-            <Link href="/about">
-              <Button
-                size="lg"
-                variant="outline"
-                className="pg-hero-btn-secondary border-2 transition-all duration-300"
-              >
-                关于我
-              </Button>
-            </Link>
+          <div className={`${styles.visual} ${touchArtwork ? styles.visualTouch : ''}`}>
+            {touchArtwork ? (
+              <AronaVisual artwork={touchArtwork} />
+            ) : (
+              <Image
+                unoptimized
+                className={styles.character}
+                src={arona.src}
+                alt="碧蓝档案的阿罗娜"
+                width={arona.width}
+                height={arona.height}
+                fetchPriority="high"
+                decoding="async"
+              />
+            )}
           </div>
-
-          {/* 社交链接 */}
-          {hasSocialLinks && (
-            <div
-              className={`transition-all duration-1000 delay-700 ease-out ${
-                mounted ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                {showGithub && (
-                  <a
-                    href={githubUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-slot="button"
-                    className="pg-hero-social-btn rounded-full p-3 shadow-md transition-all duration-300 hover:scale-110 hover:shadow-lg"
-                  >
-                    <Github className="h-5 w-5" />
-                  </a>
-                )}
-                {showX && (
-                  <a
-                    href={xUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-slot="button"
-                    className="pg-hero-social-btn rounded-full p-3 shadow-md transition-all duration-300 hover:scale-110 hover:shadow-lg"
-                  >
-                    <X className="h-5 w-5" />
-                  </a>
-                )}
-                {showBilibili && (
-                  <a
-                    href={bilibiliUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-slot="button"
-                    className="pg-hero-social-btn rounded-full p-3 shadow-md transition-all duration-300 hover:scale-110 hover:shadow-lg"
-                  >
-                    <Tv className="h-5 w-5" />
-                  </a>
-                )}
-                {showEmail && (
-                  <a
-                    href={`mailto:${email}`}
-                    data-slot="button"
-                    className="pg-hero-social-btn rounded-full p-3 shadow-md transition-all duration-300 hover:scale-110 hover:shadow-lg"
-                  >
-                    <Mail className="h-5 w-5" />
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
         </div>
-      </div>
 
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 0.3;
-            transform: scale(1);
-          }
-          50% {
-            opacity: 0.5;
-            transform: scale(1.05);
-          }
-        }
-        @keyframes blink {
-          0%, 50% {
-            opacity: 1;
-          }
-          51%, 100% {
-            opacity: 0;
-          }
-        }
-        @keyframes tilt {
-          0%, 100% {
-            transform: rotate(0deg);
-          }
-          25% {
-            transform: rotate(3deg);
-          }
-          75% {
-            transform: rotate(-3deg);
-          }
-        }
-        .animate-pulse {
-          animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        .animate-blink {
-          animation: blink 1s step-end infinite;
-        }
-        .animate-tilt {
-          animation: tilt 3s ease-in-out infinite;
-        }
-        .delay-1000 {
-          animation-delay: 1s;
-        }
-        .delay-700 {
-          animation-delay: 0.7s;
-        }
-      `}</style>
-    </section>
+        <div className={styles.social}>
+          {github && settings['profile.social.github.enabled'] !== false && isValidHref(github) && (
+            <a href={github} target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+              <Github size={19} />
+            </a>
+          )}
+          {email &&
+            settings['profile.social.email.enabled'] !== false &&
+            isValidHref(`mailto:${email}`) && (
+              <a href={`mailto:${email}`} aria-label="邮件联系">
+                <Mail size={19} />
+              </a>
+            )}
+        </div>
+      </section>
+    </HeroInteraction>
   )
 }

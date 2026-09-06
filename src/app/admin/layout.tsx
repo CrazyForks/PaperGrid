@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { LogOut } from 'lucide-react'
+import { Circle, ExternalLink, LogOut } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,11 +18,11 @@ import { AdminNav } from '@/components/layout/admin-nav'
 import { AdminContentTransition } from '@/components/layout/admin-content'
 import { AdminLoadingFallback } from '@/components/layout/admin-loading-fallback'
 import { AdminMobileSidebar } from '@/components/layout/admin-mobile-sidebar'
+import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { getSetting } from '@/lib/settings'
-import { isDefaultAdmin } from '@/lib/admin-default'
 
 const navItems = [
-  { href: '/admin', iconName: 'LayoutDashboard', label: '仪表板' },
+  { href: '/admin', iconName: 'LayoutDashboard', label: '工作台' },
   { href: '/admin/posts', iconName: 'FileText', label: '文章管理' },
   { href: '/admin/files', iconName: 'Images', label: '文件管理' },
   { href: '/admin/works', iconName: 'GalleryVerticalEnd', label: '作品展示' },
@@ -45,14 +45,9 @@ export const metadata: Metadata = {
   },
 }
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
-  const defaultAvatarUrl = (await getSetting<string>('site.defaultAvatarUrl', '')) || ''
-  const adminInitialSetup = await isDefaultAdmin()
+
   const rawVersion = process.env.APP_VERSION || ''
   const appVersion = rawVersion ? (rawVersion.startsWith('v') ? rawVersion : `v${rawVersion}`) : ''
 
@@ -64,25 +59,35 @@ export default async function AdminLayout({
     redirect('/')
   }
 
+  const defaultAvatarUrl = (await getSetting<string>('site.defaultAvatarUrl', '')) || ''
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
+    <div className="schale-admin">
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-        <div className="flex h-16 items-center justify-between px-4">
+      <header className="schale-admin-header">
+        <div className="flex h-full items-center justify-between gap-3">
           {/* 左侧入口 */}
           <div className="flex items-center gap-4">
             <AdminMobileSidebar items={navItems} />
-            <Link href="/admin" className="flex items-center">
-              <span className="text-sm font-semibold tracking-tight sm:text-base">
-                博客管理后台
+            <Link href="/admin" className="schale-brand">
+              <span className="schale-mark">
+                <Circle />
               </span>
+              <span className="text-sm font-semibold tracking-tight sm:text-base">创作终端</span>
             </Link>
           </div>
 
+          <Link
+            href="/"
+            className="text-muted-foreground ml-auto hidden items-center gap-2 text-sm sm:flex"
+          >
+            <ExternalLink size={15} /> 查看博客
+          </Link>
+          <ThemeToggle />
           {/* User Menu */}
           <div className="flex items-center gap-4">
             {appVersion && (
-              <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
+              <span className="text-muted-foreground hidden items-center rounded-md border px-2 py-1 text-xs sm:inline-flex">
                 <span className="font-mono">{appVersion}</span>
               </span>
             )}
@@ -90,7 +95,10 @@ export default async function AdminLayout({
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                   <Avatar className="h-9 w-9">
-                    <AvatarImage src={session.user.image || defaultAvatarUrl || undefined} alt={session.user.name || 'User'} />
+                    <AvatarImage
+                      src={session.user.image || defaultAvatarUrl || undefined}
+                      alt={session.user.name || 'User'}
+                    />
                     <AvatarFallback>
                       {session.user.name?.charAt(0).toUpperCase() || 'U'}
                     </AvatarFallback>
@@ -100,8 +108,8 @@ export default async function AdminLayout({
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{session.user.name}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
+                    <p className="text-sm leading-none font-medium">{session.user.name}</p>
+                    <p className="text-muted-foreground text-xs leading-none">
                       {session.user.email}
                     </p>
                   </div>
@@ -134,28 +142,18 @@ export default async function AdminLayout({
         </div>
       </header>
 
-      <div className="flex">
+      <div className="schale-admin-layout">
         {/* Sidebar */}
-        <aside className="hidden w-64 flex-col border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 lg:flex">
+        <aside className="schale-admin-sidebar">
+          <div className="ba-sidebar-heading">
+            <strong>创作与管理</strong>
+          </div>
           <AdminNav items={navItems} />
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 font-sans">
-          {adminInitialSetup && (
-            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-100">
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-medium">已启用默认管理员账号</span>
-                <span className="text-amber-800/80 dark:text-amber-100/80">
-                  邮箱: admin@example.com · 密码: admin123
-                </span>
-                <Link href="/admin/settings" className="font-medium underline underline-offset-2">
-                  立即修改账号与密码
-                </Link>
-              </div>
-            </div>
-          )}
-          <Suspense fallback={<AdminLoadingFallback delayMs={500} />}>
+        <main id="admin-content" className="schale-admin-main">
+          <Suspense fallback={<AdminLoadingFallback delayMs={150} />}>
             <AdminContentTransition>{children}</AdminContentTransition>
           </Suspense>
         </main>

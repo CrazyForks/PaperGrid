@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
@@ -92,6 +93,7 @@ export async function GET(
       }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('获取 AI 会话失败:', error)
     const message = error instanceof Error ? error.message : '获取 AI 会话失败'
     return NextResponse.json({ error: message }, { status: 500 })
@@ -120,7 +122,7 @@ export async function PUT(
     }
 
     const { threadId } = await context.params
-    const body = await request.json().catch(() => ({} as Record<string, unknown>))
+    const body = await readJsonBody(request)
 
     const title = typeof body.title === 'string' ? body.title : undefined
     const model = typeof body.model === 'string' ? body.model : undefined
@@ -141,6 +143,7 @@ export async function PUT(
       }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('保存 AI 会话失败:', error)
     const message = error instanceof Error ? error.message : '保存 AI 会话失败'
     return NextResponse.json({ error: message }, { status: 500 })
@@ -178,6 +181,7 @@ export async function DELETE(
       }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('删除 AI 会话失败:', error)
     const message = error instanceof Error ? error.message : '删除 AI 会话失败'
     return NextResponse.json({ error: message }, { status: 500 })

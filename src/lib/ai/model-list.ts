@@ -1,3 +1,4 @@
+import { publicFetch } from '@/lib/public-network'
 import { normalizeAndValidateAiBaseUrl } from '@/lib/ai/security'
 
 export type AiProviderModel = {
@@ -57,7 +58,7 @@ export async function fetchOpenAiCompatibleModels(input: {
   let response: Response
   try {
     try {
-      response = await fetch(endpoint, {
+      response = await publicFetch(endpoint, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${input.apiKey}`,

@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma, postWriter } from '../src/lib/prisma'
 
 const posts = [
   {
@@ -283,7 +281,7 @@ async function main() {
     const updatedAt = new Date(publishedAt)
 
     // 创建或更新文章
-    const post = await prisma.post.upsert({
+    const post = await postWriter.post.upsert({
       where: { id: postData.id },
       update: {
         title: postWithoutTags.title,

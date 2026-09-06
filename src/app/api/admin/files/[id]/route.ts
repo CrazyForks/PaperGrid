@@ -41,12 +41,7 @@ async function getReferenceSummary(mediaId: string) {
   const fuzzyHint = `${MEDIA_URL_PREFIX}${mediaId}`
 
   const [postRows, projectRows, userRows, settingRows] = await Promise.all([
-    prisma.post.findMany({
-      where: {
-        OR: [{ coverImage: targetUrl }, { coverImage: { contains: fuzzyHint } }],
-      },
-      select: { coverImage: true },
-    }),
+    prisma.postMedia.count({ where: { mediaId } }),
     prisma.project.findMany({
       where: {
         OR: [{ image: targetUrl }, { image: { contains: fuzzyHint } }],
@@ -65,7 +60,7 @@ async function getReferenceSummary(mediaId: string) {
     }),
   ])
 
-  const posts = postRows.filter((row) => isMediaUrlReference(row.coverImage, mediaId)).length
+  const posts = postRows
   const projects = projectRows.filter((row) => isMediaUrlReference(row.image, mediaId)).length
   const users = userRows.filter((row) => isMediaUrlReference(row.image, mediaId)).length
   const settings = settingRows
@@ -115,7 +110,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       )
     }
 
-    const deleted = await prisma.mediaFile.delete({ where: { id } })
+    const deleted = await prisma.mediaFile.delete({ where: { id }, include: { postReferences: { select: { postId: true } } } })
     removeCachedMediaResolvedFile(id)
 
     const absolutePath = resolveMediaPath(deleted.storagePath)
@@ -129,21 +124,30 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         logger.error({ err: nodeError }, '删除本地文件失败，准备回滚数据库记录')
 
         try {
-          await prisma.mediaFile.create({
-            data: {
-              id: deleted.id,
-              originalName: deleted.originalName,
-              storagePath: deleted.storagePath,
-              mimeType: deleted.mimeType,
-              ext: deleted.ext,
-              size: deleted.size,
-              width: deleted.width,
-              height: deleted.height,
-              sha256: deleted.sha256,
-              compressionMode: deleted.compressionMode,
-              uploadedById: deleted.uploadedById,
-              createdAt: deleted.createdAt,
-            },
+          await prisma.$transaction(async tx => {
+            const posts = await tx.post.findMany({
+              where: { id: { in: deleted.postReferences.map(reference => reference.postId) } },
+              select: { id: true },
+            })
+            await tx.mediaFile.create({
+              data: {
+                id: deleted.id,
+                private: deleted.private,
+                originalName: deleted.originalName,
+                storagePath: deleted.storagePath,
+                mimeType: deleted.mimeType,
+                ext: deleted.ext,
+                size: deleted.size,
+                width: deleted.width,
+                height: deleted.height,
+                sha256: deleted.sha256,
+                compressionMode: deleted.compressionMode,
+                uploadedById: deleted.uploadedById,
+                uploadedByApiKeyId: deleted.uploadedByApiKeyId,
+                createdAt: deleted.createdAt,
+                postReferences: { create: posts.map(post => ({ postId: post.id })) },
+              },
+            })
           })
         } catch (rollbackError) {
           logger.error({ err: rollbackError }, '回滚媒体记录失败')

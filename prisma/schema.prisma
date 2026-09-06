@@ -49,6 +49,7 @@ model User {
   image         String?
   password      String?   // For credentials login
   role          Role      @default(USER)
+  sessionVersion Int      @default(0)
   accounts      Account[]
   sessions      Session[]
   posts         Post[]
@@ -140,6 +141,7 @@ model Post {
   comments    Comment[]
   viewCount   ViewCount?
   dailyViews  DailyView[]
+  mediaReferences PostMedia[]
   analytics   Analytics?
   readingTime Int?       // in minutes
   isProtected Boolean    @default(false)
@@ -152,6 +154,8 @@ model Post {
   @@index([authorId])
   @@index([categoryId])
   @@index([locale])
+  @@index([status, publishedAt, id])
+  @@index([status, categoryId, publishedAt])
 }
 
 model Comment {
@@ -172,6 +176,7 @@ model Comment {
 
   @@index([postId])
   @@index([status])
+  @@index([postId, status, createdAt, id])
 }
 
 enum CommentStatus {
@@ -189,6 +194,8 @@ enum MediaCompressionMode {
 
 model MediaFile {
   id              String               @id @default(cuid())
+  postReferences PostMedia[]
+  private         Boolean              @default(false)
   originalName    String
   storagePath     String               @unique
   mimeType        String
@@ -200,10 +207,13 @@ model MediaFile {
   compressionMode MediaCompressionMode @default(BALANCED)
   uploadedBy      User?                @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
   uploadedById    String?
+  uploadedByApiKeyId String?
+  uploadedByApiKey ApiKey? @relation(fields: [uploadedByApiKeyId], references: [id], onDelete: SetNull)
   createdAt       DateTime             @default(now())
 
   @@index([createdAt])
   @@index([uploadedById])
+  @@index([uploadedByApiKeyId])
 }
 
 model ViewCount {
@@ -255,10 +265,27 @@ model ApiKey {
   expiresAt   DateTime?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  uploads     MediaFile[]
+  idempotencyRequests ApiIdempotency[]
 
   @@index([keyPrefix])
   @@index([enabled])
   @@index([createdById])
+  @@index([expiresAt])
+}
+
+model ApiIdempotency {
+  id          String   @id @default(cuid())
+  apiKeyId    String
+  apiKey      ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  operation   String
+  keyHash     String
+  requestHash String
+  response    Json
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  @@unique([apiKeyId, operation, keyHash])
   @@index([expiresAt])
 }
 
@@ -275,4 +302,14 @@ model Setting {
   updatedAt   DateTime @updatedAt
 
   @@index([group])
+}
+
+// Explicit references support privacy checks and bounded file-use queries.
+model PostMedia {
+  postId String
+  mediaId String
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  media MediaFile @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  @@id([postId, mediaId])
+  @@index([mediaId])
 }

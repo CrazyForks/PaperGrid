@@ -1,7 +1,8 @@
 import { PostStatus } from '@prisma/client'
-import slugify from 'slugify'
+import { generateTaxonomySlug } from '../slug'
+import { resolveImportSlug, assertDistinctImportSlugs } from './slug'
 import readingTime from 'reading-time'
-import { prisma } from '@/lib/prisma'
+import { prisma, postWriter } from '@/lib/prisma'
 import { buildYamlFrontMatter, parseFrontMatter } from './front-matter'
 import { createZip, extractZipEntries } from './zip'
 
@@ -32,6 +33,7 @@ type ParsedMigrationPost = {
   tags: string[]
   categories: string[]
   published: boolean
+  isProtected: boolean
 }
 
 const MAX_WARNINGS = 80
@@ -85,13 +87,6 @@ function normalizeEntityName(name: string, maxLength = 120) {
   return name.trim().slice(0, maxLength)
 }
 
-function normalizeSlug(input: string, fallback: string) {
-  const fromTitle = slugify(input, { lower: true, strict: true, trim: true })
-  if (fromTitle) return fromTitle
-  const fromFallback = slugify(fallback, { lower: true, strict: true, trim: true })
-  return fromFallback || `post-${Date.now()}`
-}
-
 function parseMarkdownPost(
   fileName: string,
   content: string,
@@ -100,9 +95,7 @@ function parseMarkdownPost(
   const parsed = parseFrontMatter(content)
   const fallbackTitle = getFileNameBase(fileName)
   const title = parsed.fields.title || fallbackTitle || 'Untitled'
-  const slugSource = parsed.fields.slug || fallbackTitle || title
-  const slugFallback = fallbackTitle || title
-  const slug = normalizeSlug(slugSource, slugFallback)
+  const slug = resolveImportSlug(parsed.fields.slug, fileName)
   const createdAt = parsed.fields.date || new Date()
   const updatedAt = parsed.fields.updated
   const tags = toUniqueList(parsed.fields.tags || [])
@@ -131,6 +124,7 @@ function parseMarkdownPost(
     tags,
     categories,
     published,
+    isProtected: parsed.fields.isProtected === true,
   }
 }
 
@@ -154,7 +148,7 @@ async function ensureCategoryByName(
     return byName.id
   }
 
-  let slugBase = slugify(normalizedName, { lower: true, strict: true, trim: true })
+  let slugBase = generateTaxonomySlug(normalizedName)
   if (!slugBase) slugBase = 'category'
   let slug = slugBase
   let suffix = 1
@@ -197,7 +191,7 @@ async function ensureTagByName(
     return byName.id
   }
 
-  let slugBase = slugify(normalizedName, { lower: true, strict: true, trim: true })
+  let slugBase = generateTaxonomySlug(normalizedName)
   if (!slugBase) slugBase = 'tag'
   let slug = slugBase
   let suffix = 1
@@ -228,6 +222,7 @@ export async function exportMigrationMarkdownZip() {
       slug: true,
       content: true,
       status: true,
+      isProtected: true,
       createdAt: true,
       updatedAt: true,
       category: {
@@ -255,6 +250,7 @@ export async function exportMigrationMarkdownZip() {
       tags: post.postTags.map((item) => item.tag.name),
       categories: post.category?.name ? [post.category.name] : [],
       published: post.status === PostStatus.PUBLISHED,
+      isProtected: post.isProtected,
     })
 
     const body = post.content.endsWith('\n') ? post.content : `${post.content}\n`
@@ -276,7 +272,7 @@ export async function exportMigrationMarkdownZip() {
     })
   }
 
-  const zip = createZip(entries)
+  const zip = await createZip(entries)
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 
   return {
@@ -335,9 +331,12 @@ export async function importMigrationMarkdown(input: {
     } catch (error) {
       console.error('迁移导入失败:', error)
       summary.posts.skipped += 1
-      pushWarning(summary, `文件 "${file.name}" 导入失败`)
+      pushWarning(summary, `文件 "${file.name}" 导入失败：${error instanceof Error ? error.message : '格式错误'}`)
     }
   }
+
+  // Preflight before creating taxonomies or writing any article.
+  assertDistinctImportSlugs(parsedPosts)
 
   const categoryNames = Array.from(new Set(
     parsedPosts
@@ -406,8 +405,14 @@ export async function importMigrationMarkdown(input: {
         },
       })
 
+      // Markdown 不携带密码哈希；保护标记只能收紧权限，缺少密码时保持锁定。
+      const isProtected = parsed.isProtected || existing?.isProtected === true
+      if (isProtected && !existing?.passwordHash) {
+        pushWarning(summary, `文章 "${parsed.title}" 已保持锁定，请在编辑页重新设置访问密码`)
+      }
+
       if (existing) {
-        await prisma.post.update({
+        await postWriter.post.update({
           where: { id: existing.id },
           data: {
             title: parsed.title,
@@ -417,8 +422,7 @@ export async function importMigrationMarkdown(input: {
             status,
             locale: 'zh',
             categoryId,
-            // 迁移更新仅覆盖文章内容，不改变既有加密状态
-            isProtected: existing.isProtected,
+            isProtected,
             passwordHash: existing.passwordHash,
             readingTime: Math.max(1, Math.round(readingTime(parsed.content).minutes)),
             createdAt: parsed.createdAt,
@@ -432,7 +436,7 @@ export async function importMigrationMarkdown(input: {
         })
         summary.posts.updated += 1
       } else {
-        await prisma.post.create({
+        await postWriter.post.create({
           data: {
             title: parsed.title,
             slug: parsed.slug,
@@ -443,7 +447,7 @@ export async function importMigrationMarkdown(input: {
             locale: 'zh',
             categoryId,
             authorId: input.userId,
-            isProtected: false,
+            isProtected,
             passwordHash: null,
             readingTime: Math.max(1, Math.round(readingTime(parsed.content).minutes)),
             createdAt: parsed.createdAt,

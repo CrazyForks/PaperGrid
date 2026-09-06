@@ -30,6 +30,8 @@ export function buildContentSecurityPolicy(options?: {
   const scriptSrc = [
     "'self'",
     ...(allowUnsafeInlineScript ? ["'unsafe-inline'"] : []),
+    // React needs eval to reconstruct server-side call stacks during development.
+    ...(process.env.NODE_ENV === 'development' ? ["'unsafe-eval'"] : []),
     ...extraScriptOrigins,
   ].join(' ')
 

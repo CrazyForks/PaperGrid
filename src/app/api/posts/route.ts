@@ -1,8 +1,11 @@
-import { prisma } from '@/lib/prisma'
+import { validatePostInput } from '@/lib/post-input'
+import { pageNumber, pageSize } from '@/lib/pagination'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
+import { prisma, postWriter } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import { PostStatus, type Prisma } from '@prisma/client'
-import slugify from 'slugify'
+import { createPostWithSlug } from '@/lib/post-slug'
 import readingTime from 'reading-time'
 import bcrypt from 'bcryptjs'
 import { revalidatePublicPostPaths } from '@/lib/post-revalidate'
@@ -17,9 +20,9 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url)
-    const page = parseInt(searchParams.get('page') || '1')
+    const page = pageNumber(searchParams.get('page'))
     const rawLimit = parseInt(searchParams.get('limit') || '10')
-    const limit = Math.min(Math.max(rawLimit, 1), 50)
+    const limit = Math.min(pageSize(rawLimit), 50)
     const status = searchParams.get('status')
     const search = searchParams.get('search')
     const categoryId = searchParams.get('categoryId')
@@ -31,6 +34,7 @@ export async function GET(req: Request) {
     const where: Prisma.PostWhereInput = {}
 
     if (status && status !== 'all') {
+      if (!Object.values(PostStatus).includes(status as PostStatus)) return NextResponse.json({ error: '无效的文章状态' }, { status: 400 })
       where.status = status as PostStatus
     }
 
@@ -103,6 +107,7 @@ export async function GET(req: Request) {
       },
     })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('获取文章列表失败:', error)
     return NextResponse.json(
       { error: '获取文章列表失败' },
@@ -120,7 +125,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const body = await req.json()
+    const body = await readJsonBody(req)
+    validatePostInput(body, false)
     const {
       title,
       content,
@@ -142,16 +148,6 @@ export async function POST(req: Request) {
         { error: '标题和内容不能为空' },
         { status: 400 }
       )
-    }
-
-    const baseSlug =
-      slugify(String(title), { lower: true, strict: true, trim: true }) ||
-      `post-${Date.now()}`
-    let slug = baseSlug
-    let suffix = 1
-    while (await prisma.post.findUnique({ where: { slug } })) {
-      slug = `${baseSlug}-${suffix}`
-      suffix += 1
     }
 
     const normalizedCategoryId =
@@ -195,7 +191,7 @@ export async function POST(req: Request) {
       if (rawPassword.length < 4) {
         return NextResponse.json({ error: '文章密码至少 4 位' }, { status: 400 })
       }
-      if (rawPassword.length > 64) {
+      if (Buffer.byteLength(rawPassword) > 72) {
         return NextResponse.json({ error: '文章密码过长' }, { status: 400 })
       }
       passwordHash = await bcrypt.hash(rawPassword, 10)
@@ -206,7 +202,7 @@ export async function POST(req: Request) {
       parsedPublishedAt ?? (nextStatus === PostStatus.PUBLISHED ? new Date() : null)
 
     // 创建文章
-    const post = await prisma.post.create({
+    const post = await createPostWithSlug(slug => postWriter.post.create({
       data: {
         title,
         slug,
@@ -259,7 +255,7 @@ export async function POST(req: Request) {
           },
         },
       },
-    })
+    }))
 
     if (post.status === PostStatus.PUBLISHED) {
       revalidatePublicPostPaths(post)
@@ -267,6 +263,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ post }, { status: 201 })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('创建文章失败:', error)
     return NextResponse.json({ error: '创建文章失败' }, { status: 500 })
   }

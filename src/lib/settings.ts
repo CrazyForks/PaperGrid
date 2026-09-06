@@ -3,7 +3,6 @@ import { prisma } from './prisma'
 
 const SETTING_VALUE_FIELD_BY_KEY: Record<string, string> = {
   'ui.publicStylePreset': 'preset',
-  'ui.mobileReadingBackground': 'style',
   'site.customHeadCode': 'text',
 }
 
@@ -80,7 +79,6 @@ export const POST_PAGE_SETTING_KEYS = [
   'site.ownerName',
   'site.defaultAvatarUrl',
   'profile.role',
-  'ui.mobileReadingBackground',
 ] as const
 
 async function getSettingsSnapshot(keys: readonly string[]) {
@@ -118,7 +116,6 @@ export type PostPageSettings = {
   ownerName: string
   defaultAvatarUrl: string
   ownerRole: string
-  mobileReadingBackground: string
 }
 
 export async function getSetting<T = unknown>(key: string, defaultValue?: T): Promise<T | undefined> {
@@ -144,7 +141,5 @@ export async function getPostPageSettings(): Promise<PostPageSettings> {
     ownerName: (settings['site.ownerName'] as string | undefined) || '千叶',
     defaultAvatarUrl: (settings['site.defaultAvatarUrl'] as string | undefined) || '',
     ownerRole: (settings['profile.role'] as string | undefined) || '全栈开发者',
-    mobileReadingBackground:
-      (settings['ui.mobileReadingBackground'] as string | undefined) || 'grid',
   }
 }

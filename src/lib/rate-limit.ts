@@ -4,6 +4,7 @@ type Bucket = {
   tokens: number
   lastRefill: number
   lastSeen: number
+  windowMs: number
 }
 
 export type RateLimitOptions = {
@@ -30,13 +31,13 @@ if (!globalStore.__rateLimitBuckets) {
   globalStore.__rateLimitBuckets = store
 }
 
-function cleanupStore(now: number, windowMs: number) {
-  if (store.size < 10000) return
-  const cutoff = now - windowMs * 2
+const MAX_BUCKETS = 10000
+let nextCleanup = 0
+function cleanupStore(now: number) {
+  if (now < nextCleanup) return
+  nextCleanup = now + 30000
   for (const [key, bucket] of store) {
-    if (bucket.lastSeen < cutoff) {
-      store.delete(key)
-    }
+    if (now - bucket.lastSeen > bucket.windowMs * 2) store.delete(key)
   }
 }
 
@@ -55,27 +56,28 @@ function normalizeIp(raw: string | null): string | null {
 }
 
 export function getClientIp(request: Request): string {
-  const realIp = normalizeIp(request.headers.get('x-real-ip'))
-  if (realIp) return realIp
-
-  const cfIp = normalizeIp(request.headers.get('cf-connecting-ip'))
-  if (cfIp) return cfIp
-
-  const vercelIp = normalizeIp(request.headers.get('x-vercel-forwarded-for'))
-  if (vercelIp) return vercelIp
-
+  // Only trust a header explicitly overwritten by the deployment's proxy.
+  const header = process.env.TRUSTED_PROXY_HEADER?.toLowerCase()
+  if (header && ['x-real-ip', 'cf-connecting-ip'].includes(header)) {
+    return normalizeIp(request.headers.get(header)) || 'unknown'
+  }
   return 'unknown'
 }
 
 export function rateLimit(key: string, options: RateLimitOptions): RateLimitResult {
   const now = Date.now()
   const { windowMs, max } = options
+  cleanupStore(now)
+  if (!store.has(key) && store.size >= MAX_BUCKETS) {
+    return { ok: false, limit: max, remaining: 0, reset: Math.ceil((now + 30000) / 1000), retryAfter: 30 }
+  }
   const refillRate = max / windowMs
 
   const bucket = store.get(key) ?? {
     tokens: max,
     lastRefill: now,
     lastSeen: now,
+    windowMs,
   }
 
   const elapsed = now - bucket.lastRefill
@@ -95,7 +97,7 @@ export function rateLimit(key: string, options: RateLimitOptions): RateLimitResu
   }
 
   store.set(key, bucket)
-  cleanupStore(now, windowMs)
+
 
   const remaining = Math.max(0, Math.floor(bucket.tokens))
   const resetMs = (max - bucket.tokens) / refillRate
@@ -122,4 +124,14 @@ export function rateLimitHeaders(result: RateLimitResult): Record<string, string
     headers['Retry-After'] = String(result.retryAfter)
   }
   return headers
+}
+
+export function rateLimitLogin(clientIp: string, email: string): RateLimitResult {
+  const source = rateLimit(`login:${clientIp}`, { windowMs: 5 * 60 * 1000, max: 30 })
+  // Do not allocate account buckets for a source that has already exhausted its limit.
+  if (!source.ok) return source
+  return rateLimit(`login-account:${email.trim().toLowerCase()}`, {
+    windowMs: 5 * 60 * 1000,
+    max: 20,
+  })
 }

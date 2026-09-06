@@ -89,21 +89,17 @@ function toThreadRecord(value: unknown, fallback: { id: string; title: string })
   }
 }
 
-export async function listAiThreads(userId: string) {
+export async function listAiThreads(userId: string, page = 1) {
   const prefix = getThreadPrefix(userId)
-  const rows = await prisma.setting.findMany({
-    where: {
-      group: 'ai',
-      key: {
-        startsWith: prefix,
-      },
-    },
-    select: {
-      key: true,
-      value: true,
-      updatedAt: true,
-    },
-  })
+  const rows = await prisma.$queryRaw<Array<{ key: string; value: string; updatedAt: string }>>`
+    SELECT key, updatedAt, json_object(
+      'id', json_extract(value, '$.id'), 'title', json_extract(value, '$.title'),
+      'model', json_extract(value, '$.model'), 'createdAt', json_extract(value, '$.createdAt'),
+      'updatedAt', json_extract(value, '$.updatedAt'), 'messages', json('[]'),
+      'lastMessage', substr(json_extract(value, '$.messages[#-1].content'), 1, 160)
+    ) AS value FROM Setting WHERE key LIKE ${prefix + '%'}
+    ORDER BY updatedAt DESC, key DESC LIMIT 30 OFFSET ${(page - 1) * 30}
+  `
 
   return rows
     .map((row) => {
@@ -112,12 +108,13 @@ export async function listAiThreads(userId: string) {
         return null
       }
 
-      const thread = toThreadRecord(row.value, {
+      const summary = JSON.parse(row.value)
+      const thread = toThreadRecord(summary, {
         id: threadId,
         title: 'New Chat',
       })
 
-      const lastMessage = thread.messages[thread.messages.length - 1]?.content || ''
+      const lastMessage = typeof summary.lastMessage === 'string' ? summary.lastMessage : ''
       return {
         id: thread.id,
         title: thread.title,

@@ -1,3 +1,5 @@
+import { revalidateForUpdatedSettings } from '@/lib/settings-revalidate'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json().catch(() => ({} as Record<string, unknown>))
+    const body = await readJsonBody(request)
     const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : ''
     if (!apiKey) {
       return NextResponse.json(
@@ -61,8 +63,10 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    revalidateForUpdatedSettings([AI_SETTING_KEYS.apiKey])
     return NextResponse.json({ ok: true }, { headers: rateLimitHeaders(limitResult) })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('保存 AI API Key 失败:', error)
     return NextResponse.json({ error: '保存失败' }, { status: 500 })
   }

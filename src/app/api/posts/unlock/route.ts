@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
@@ -5,6 +6,7 @@ import { getClientIp, rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import {
   buildPostUnlockToken,
   POST_UNLOCK_MAX_AGE,
+  postUnlockCookieName,
 } from '@/lib/post-protection'
 
 export async function POST(request: NextRequest) {
@@ -20,11 +22,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json()
+    const body = await readJsonBody(request)
     const slug = typeof body.slug === 'string' ? body.slug.trim() : ''
     const password = typeof body.password === 'string' ? body.password : ''
 
-    if (!slug || !password) {
+    if (!slug || slug.length > 300 || !password || Buffer.byteLength(password) > 72) {
       return NextResponse.json({ error: '缺少文章或密码' }, { status: 400 })
     }
 
@@ -51,8 +53,14 @@ export async function POST(request: NextRequest) {
 
     const token = buildPostUnlockToken(post.id, post.passwordHash)
 
-    return NextResponse.json({ ok: true, token, postId: post.id, maxAge: POST_UNLOCK_MAX_AGE })
+    const response = NextResponse.json({ ok: true, token, postId: post.id, maxAge: POST_UNLOCK_MAX_AGE }, { headers: { 'Cache-Control': 'private, no-store' } })
+    response.cookies.set(postUnlockCookieName(post.id), token, {
+      httpOnly: true, sameSite: 'lax', secure: new URL(process.env.NEXTAUTH_URL || request.url).protocol === 'https:',
+      path: '/', maxAge: POST_UNLOCK_MAX_AGE,
+    })
+    return response
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('文章解锁失败:', error)
     return NextResponse.json({ error: '解锁失败' }, { status: 500 })
   }

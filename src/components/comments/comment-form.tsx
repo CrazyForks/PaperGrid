@@ -10,10 +10,12 @@ import { LogIn } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
 
+export type CommentSubmission = { id: string; status: string }
+
 interface CommentFormProps {
   postSlug: string
   allowGuest?: boolean
-  onSuccess?: () => void
+  onSuccess?: (comment: CommentSubmission) => void
   parentId?: string | null
   onCancel?: () => void
   title?: string
@@ -80,7 +82,7 @@ export function CommentForm({
 
     startTransition(async () => {
       try {
-        const response = await fetch(`/api/comments?slug=${postSlug}`, {
+        const response = await fetch(`/api/comments?slug=${encodeURIComponent(postSlug)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -104,7 +106,7 @@ export function CommentForm({
             title: '成功',
             description: data.comment?.status === 'PENDING' ? '评论已提交，待审核' : '评论发表成功！',
           })
-          onSuccess?.()
+          onSuccess?.({ id: data.comment.id, status: data.comment.status })
         } else {
           toast({
             title: '错误',

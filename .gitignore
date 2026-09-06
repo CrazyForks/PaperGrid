@@ -49,3 +49,25 @@ next-env.d.ts
 *.db-wal
 *.db-shm
 public/uploads/
+
+# Local runtime credentials and test databases
+.local/
+
+node-compile-cache/
+
+# Official fan-kit artwork is fetched for the blog, not redistributed with the source.
+public/assets/jell-anniversary.webp
+
+# Synthetic review-only artwork uses its original fan-kit terms.
+public/assets/review-*.webp
+
+# Official Arona artwork is fetched separately from the source code.
+public/assets/arona-hero.webp
+public/assets/arona-cutout.webp
+public/assets/arona-repaired.webp
+public/assets/arona-touch.webp
+public/assets/arona-touch-cel.webp
+public/assets/arona-touch-happy.webp
+
+# Local generated artwork and intermediate images.
+/output/imagegen/

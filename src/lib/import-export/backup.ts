@@ -1,6 +1,6 @@
 import { PostStatus, Prisma } from '@prisma/client'
 import readingTime from 'reading-time'
-import { prisma } from '@/lib/prisma'
+import { prisma, postWriter } from '@/lib/prisma'
 
 type Counter = {
   created: number
@@ -102,7 +102,7 @@ type ExistingPostSnapshot = {
 }
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on'])
-const BCRYPT_HASH_PATTERN = /^\$2[aby]\$(0[4-9]|[12]\d|3[01])\$[./A-Za-z0-9]{53}$/
+const BCRYPT_HASH_PATTERN = /^\$2[aby]\$(0[4-9]|1[0-4])\$[./A-Za-z0-9]{53}$/
 const MAX_WARNINGS = 80
 
 function createCounter(): Counter {
@@ -385,6 +385,11 @@ export async function exportBackupData(includeSensitive: boolean): Promise<Backu
 }
 
 export function parseBackupPayload(raw: unknown) {
+  if (raw && typeof raw === 'object' && 'meta' in raw) {
+    const meta = (raw as { meta?: { format?: string; version?: string } }).meta
+    if (meta?.format && meta.format !== 'papergrid-backup') throw new Error('不支持的备份格式')
+    if (meta?.version && meta.version !== '1.0.0') throw new Error('备份版本不受支持，请使用匹配的 PaperGrid 版本导入')
+  }
   const dataNode = getDataNode(raw)
   if (!dataNode) {
     throw new Error('导入数据格式错误，缺少 data 节点')
@@ -834,7 +839,7 @@ export async function importBackupData(input: {
       const uniqueTagIds = Array.from(new Set(tagIds))
       const existingPost = existingPostBySlug.get(slug) || null
 
-      let isProtected = false
+      let isProtected = wantsProtected
       let passwordHash: string | null = null
 
       if (wantsProtected) {
@@ -854,8 +859,8 @@ export async function importBackupData(input: {
           pushWarning(
             summary,
             hasInvalidImportedPasswordHash
-              ? `文章 "${slug}" 提供的密码哈希格式不合法，已忽略并改为不加密`
-              : `文章 "${slug}" 标记为加密但缺少密码哈希，已改为不加密`
+              ? `文章 "${slug}" 提供的密码哈希格式不合法，已保持锁定，请在后台重新设置密码`
+              : `文章 "${slug}" 标记为加密但缺少密码哈希，已保持锁定，请在后台重新设置密码`
           )
         }
       }
@@ -865,7 +870,7 @@ export async function importBackupData(input: {
         : null
 
       if (existingPost) {
-        await prisma.post.update({
+        await postWriter.post.update({
           where: { id: existingPost.id },
           data: {
             title,
@@ -895,7 +900,7 @@ export async function importBackupData(input: {
           publishedAt: nextPublishedAt,
         })
       } else {
-        const created = await prisma.post.create({
+        const created = await postWriter.post.create({
           data: {
             title,
             slug,

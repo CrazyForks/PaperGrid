@@ -1,3 +1,6 @@
+import { parse as parseYaml } from 'yaml'
+import { parse as parseToml } from 'smol-toml'
+
 type ParsedMap = Record<string, unknown>
 
 export type ParsedFrontMatter = {
@@ -11,6 +14,7 @@ export type ParsedFrontMatter = {
     tags: string[]
     categories: string[]
     published?: boolean
+    isProtected?: boolean
   }
 }
 
@@ -22,19 +26,13 @@ const KEY_ALIASES = {
   tags: ['tags', 'tag'],
   categories: ['categories', 'category'],
   published: ['published'],
+  isProtected: ['isProtected'],
 } as const
 
 const DRAFT_ALIASES = ['draft'] as const
 
 function stripBom(input: string) {
   return input.replace(/^\ufeff/, '')
-}
-
-function unquote(input: string) {
-  if ((input.startsWith('"') && input.endsWith('"')) || (input.startsWith("'") && input.endsWith("'"))) {
-    return input.slice(1, -1)
-  }
-  return input
 }
 
 function normalizeString(input: unknown): string | undefined {
@@ -84,73 +82,13 @@ function normalizeDate(input: unknown): Date | undefined {
   return undefined
 }
 
-function parseInlineArray(raw: string): string[] | null {
-  const trimmed = raw.trim()
-  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return null
-  const inner = trimmed.slice(1, -1).trim()
-  if (!inner) return []
-  return inner
-    .split(',')
-    .map((item) => unquote(item.trim()))
-    .filter(Boolean)
-}
-
-function parseScalar(raw: string): unknown {
-  const trimmed = raw.trim().replace(/,$/, '').trim()
-  if (!trimmed) return ''
-
-  if (trimmed === 'true') return true
-  if (trimmed === 'false') return false
-
-  const inlineList = parseInlineArray(trimmed)
-  if (inlineList) return inlineList
-
-  return unquote(trimmed)
+function asMap(value: unknown): ParsedMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as ParsedMap
 }
 
 function parseYamlBlock(block: string): ParsedMap {
-  const result: ParsedMap = {}
-  const lines = block.replace(/\r\n/g, '\n').split('\n')
-
-  let currentListKey: 'tags' | 'categories' | null = null
-
-  for (const line of lines) {
-    if (!line.trim() || line.trim().startsWith('#')) continue
-
-    const listMatch = line.match(/^\s*-\s*(.+?)\s*$/)
-    if (listMatch && currentListKey) {
-      const parsed = parseScalar(listMatch[1])
-      const items = normalizeStringList(parsed)
-      const existing = normalizeStringList(result[currentListKey])
-      result[currentListKey] = Array.from(new Set([...existing, ...items]))
-      continue
-    }
-
-    const keyMatch = line.match(/^\s*([A-Za-z_][\w-]*)\s*:\s*(.*?)\s*$/)
-    if (!keyMatch) {
-      currentListKey = null
-      continue
-    }
-
-    const key = keyMatch[1]
-    const rawValue = keyMatch[2]
-
-    if (!rawValue) {
-      if (key === 'tags' || key === 'categories') {
-        currentListKey = key
-        result[key] = normalizeStringList(result[key])
-      } else {
-        currentListKey = null
-        result[key] = ''
-      }
-      continue
-    }
-
-    currentListKey = null
-    result[key] = parseScalar(rawValue)
-  }
-
-  return result
+  return asMap(parseYaml(block, { maxAliasCount: 100 }))
 }
 
 function parseJsonLikeBlock(block: string): ParsedMap {
@@ -185,67 +123,15 @@ function parseJsonLikeBlock(block: string): ParsedMap {
     const match = line.match(/^\s*"?([A-Za-z_][\w-]*)"?\s*:\s*(.+?)\s*,?\s*$/)
     if (!match) continue
     const key = match[1]
-    const value = parseScalar(match[2])
+    const value: unknown = parseYaml(match[2].replace(/,\s*$/, ''), { maxAliasCount: 100 })
     result[key] = value
   }
 
   return result
-}
-
-function stripTomlInlineComment(raw: string) {
-  let inSingleQuote = false
-  let inDoubleQuote = false
-  let escaped = false
-
-  for (let i = 0; i < raw.length; i += 1) {
-    const char = raw[i]
-    if (escaped) {
-      escaped = false
-      continue
-    }
-
-    if (char === '\\' && inDoubleQuote) {
-      escaped = true
-      continue
-    }
-
-    if (char === "'" && !inDoubleQuote) {
-      inSingleQuote = !inSingleQuote
-      continue
-    }
-
-    if (char === '"' && !inSingleQuote) {
-      inDoubleQuote = !inDoubleQuote
-      continue
-    }
-
-    if (char === '#' && !inSingleQuote && !inDoubleQuote) {
-      return raw.slice(0, i).trimEnd()
-    }
-  }
-
-  return raw
 }
 
 function parseTomlBlock(block: string): ParsedMap {
-  const result: ParsedMap = {}
-  const lines = block.replace(/\r\n/g, '\n').split('\n')
-
-  for (const rawLine of lines) {
-    const line = stripTomlInlineComment(rawLine).trim()
-    if (!line) continue
-
-    // Ignore TOML table headers like [params] and [[params.authors]]
-    if (/^\[\[?.+\]\]?$/.test(line)) continue
-
-    const match = line.match(/^"?([A-Za-z_][\w-]*)"?\s*=\s*(.+?)\s*$/)
-    if (!match) continue
-    const key = match[1]
-    const value = parseScalar(match[2])
-    result[key] = value
-  }
-
-  return result
+  return asMap(parseToml(block))
 }
 
 function pickByAliases(record: ParsedMap, aliases: readonly string[]) {
@@ -270,6 +156,7 @@ function toFields(record: ParsedMap): ParsedFrontMatter['fields'] {
     tags: normalizeStringList(pickByAliases(record, KEY_ALIASES.tags)),
     categories: normalizeStringList(pickByAliases(record, KEY_ALIASES.categories)),
     published,
+    isProtected: normalizeBoolean(pickByAliases(record, KEY_ALIASES.isProtected)),
   }
 }
 
@@ -333,16 +220,6 @@ function quoteYaml(value: string) {
   return JSON.stringify(value)
 }
 
-function formatYamlDate(date: Date) {
-  const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(date.getUTCDate()).padStart(2, '0')
-  const hours = String(date.getUTCHours()).padStart(2, '0')
-  const minutes = String(date.getUTCMinutes()).padStart(2, '0')
-  const seconds = String(date.getUTCSeconds()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
-}
-
 export function buildYamlFrontMatter(input: {
   title: string
   slug?: string
@@ -351,6 +228,7 @@ export function buildYamlFrontMatter(input: {
   tags?: string[]
   categories?: string[]
   published?: boolean
+  isProtected?: boolean
 }) {
   const lines: string[] = []
   lines.push('---')
@@ -358,13 +236,17 @@ export function buildYamlFrontMatter(input: {
   if (input.slug) {
     lines.push(`slug: ${quoteYaml(input.slug)}`)
   }
-  lines.push(`date: ${quoteYaml(formatYamlDate(input.date))}`)
+  lines.push(`date: ${quoteYaml(input.date.toISOString())}`)
   if (typeof input.published === 'boolean') {
     lines.push(`published: ${input.published}`)
   }
 
+  if (typeof input.isProtected === 'boolean') {
+    lines.push(`isProtected: ${input.isProtected}`)
+  }
+
   if (input.updated) {
-    lines.push(`updated: ${quoteYaml(formatYamlDate(input.updated))}`)
+    lines.push(`updated: ${quoteYaml(input.updated.toISOString())}`)
   }
 
   const tags = Array.from(new Set((input.tags || []).map((it) => it.trim()).filter(Boolean)))

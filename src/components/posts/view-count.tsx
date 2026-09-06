@@ -24,11 +24,7 @@ export function ViewCount({
   initialCount: number
   mode?: ViewCountMode
 }) {
-  const [count, setCount] = useState(initialCount)
-
-  useEffect(() => {
-    setCount(initialCount)
-  }, [initialCount, slug])
+  const [count, setCount] = useState({ slug, value: initialCount })
 
   useEffect(() => {
     if (!slug) return
@@ -37,7 +33,7 @@ export function ViewCount({
 
     const applyCount = (nextCount: number | null) => {
       if (!cancelled && typeof nextCount === 'number') {
-        setCount(nextCount)
+        setCount({ slug, value: nextCount })
       }
     }
 
@@ -100,5 +96,5 @@ export function ViewCount({
     }
   }, [mode, slug])
 
-  return <span>{count}</span>
+  return <span>{count.slug === slug ? count.value : initialCount}</span>
 }

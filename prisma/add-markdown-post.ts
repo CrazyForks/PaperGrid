@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma, postWriter } from '../src/lib/prisma'
 
 const fullMarkdownPost = {
   id: 'post-markdown-guide',
@@ -331,7 +329,7 @@ async function main() {
   const { tagNames, ...postData } = fullMarkdownPost
   const now = new Date()
 
-  const post = await prisma.post.upsert({
+  const post = await postWriter.post.upsert({
     where: { id: postData.id },
     update: {
       title: postData.title,

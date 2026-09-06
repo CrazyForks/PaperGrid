@@ -8,7 +8,7 @@ import {
 } from './public-post-page'
 import { PUBLIC_CATEGORIES_CACHE_TAG } from './public-categories'
 
-const PUBLIC_POST_LIST_PATHS = ['/', '/posts', '/archive', '/categories', '/tags'] as const
+const PUBLIC_POST_LIST_PATHS = ['/', '/posts', '/archive', '/categories', '/tags', '/sitemap/0.xml'] as const
 
 type RevalidatePostLike = {
   slug?: string | null
@@ -37,7 +37,7 @@ function revalidateCommonPublicPostPaths() {
 
 export function revalidatePublicPostPaths(...posts: Array<RevalidatePostLike | null | undefined>) {
   const paths = new Set<string>(PUBLIC_POST_LIST_PATHS)
-  const tags = new Set<string>([POSTS_LIST_CACHE_TAG, POSTS_ORDER_CACHE_TAG])
+  const tags = new Set<string>([POSTS_LIST_CACHE_TAG, POSTS_ORDER_CACHE_TAG, PUBLIC_CATEGORIES_CACHE_TAG])
   let shouldRevalidatePostPages = false
 
   for (const post of posts) {
@@ -73,7 +73,7 @@ export function revalidatePublicPostPaths(...posts: Array<RevalidatePostLike | n
   }
 
   for (const tag of tags) {
-    revalidateTag(tag, 'max')
+    revalidateTag(tag, { expire: 0 })
   }
 }
 
@@ -81,7 +81,7 @@ export function revalidateAllPublicPostContent() {
   revalidateCommonPublicPostPaths()
   revalidatePath('/categories/[slug]', 'page')
   revalidatePath('/tags/[slug]', 'page')
-  revalidateTag(POSTS_CONTENT_CACHE_TAG, 'max')
+  revalidateTag(POSTS_CONTENT_CACHE_TAG, { expire: 0 })
   revalidateTag(POSTS_LIST_CACHE_TAG, 'max')
   revalidateTag(POSTS_ORDER_CACHE_TAG, 'max')
 }

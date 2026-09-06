@@ -1,5 +1,6 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { prisma, getPluginPostWriter } from '@/lib/prisma'
 import { PostStatus } from '@prisma/client'
 import { requireApiKey } from '@/lib/api-keys'
 import readingTime from 'reading-time'
@@ -182,6 +183,7 @@ export async function GET(
 
     return NextResponse.json({ post }, { headers: authResult.headers })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('插件获取文章失败:', error)
     return NextResponse.json({ error: '获取文章失败' }, { status: 500 })
   }
@@ -231,7 +233,7 @@ export async function PATCH(
       return NextResponse.json({ error: '文章不存在' }, { status: 404 })
     }
 
-    const body = await req.json()
+    const body = await readJsonBody(req)
     const {
       title,
       content,
@@ -354,9 +356,9 @@ export async function PATCH(
             { status: 400, headers: authResult.headers }
           )
         }
-        if (rawPassword.length > 64) {
+        if (Buffer.byteLength(rawPassword) > 72) {
           return NextResponse.json(
-            { error: '文章密码过长' },
+            { error: '文章密码最多 72 字节' },
             { status: 400, headers: authResult.headers }
           )
         }
@@ -379,7 +381,7 @@ export async function PATCH(
       }
     }
 
-    const post = await prisma.post.update({
+    const post = await getPluginPostWriter(authResult.apiKey!.permissions.includes('POST_READ'), authResult.apiKey!.id).post.update({
       where: { id },
       data: {
         ...(title !== undefined && { title: title.trim() }),
@@ -449,6 +451,7 @@ export async function PATCH(
 
     return NextResponse.json({ post }, { headers: authResult.headers })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('插件更新文章失败:', error)
     return NextResponse.json({ error: '更新文章失败' }, { status: 500 })
   }
@@ -503,6 +506,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '删除成功' }, { headers: authResult.headers })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('插件删除文章失败:', error)
     return NextResponse.json({ error: '删除文章失败' }, { status: 500 })
   }

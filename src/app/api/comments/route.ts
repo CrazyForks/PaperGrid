@@ -1,3 +1,6 @@
+import { pageNumber } from '@/lib/pagination'
+import { getCommentPage } from '@/lib/comment-pagination'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { after, NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -45,7 +48,7 @@ function sendCommentReplyEmailNotificationAsync(input: CommentReplyEmailNotifica
   })
 }
 
-// GET /api/comments?slug=xxx - 获取文章的所有评论
+// GET /api/comments?slug=xxx - 分页获取文章评论，可定位到指定评论
 export async function GET(request: NextRequest) {
   const logger = createRequestLogger(request, { module: 'comments', action: 'list' })
   try {
@@ -64,18 +67,18 @@ export async function GET(request: NextRequest) {
     // 查找文章
     const post = await prisma.post.findUnique({
       where: { slug },
-      select: { id: true, isProtected: true, passwordHash: true },
+      select: { id: true, status: true, isProtected: true, passwordHash: true },
     })
 
-    if (!post) {
+    if (!post || post.status !== 'PUBLISHED') {
       return NextResponse.json({ error: '文章不存在' }, { status: 404 })
     }
 
-    if (post.isProtected) {
+    if (post.isProtected && (await auth())?.user.role !== 'ADMIN') {
       if (!post.passwordHash) {
         return NextResponse.json({ error: '文章已加密' }, { status: 403 })
       }
-      const token = getPostUnlockTokenFromHeaders(request.headers)
+      const token = getPostUnlockTokenFromHeaders(request.headers, post.id)
       const unlocked = token
         ? verifyPostUnlockToken(token, post.id, post.passwordHash)
         : false
@@ -84,32 +87,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 获取评论（已审核通过的评论）
-    const comments = await prisma.comment.findMany({
-      where: {
-        postId: post.id,
-        status: 'APPROVED',
-      },
-      select: {
-        id: true,
-        content: true,
-        createdAt: true,
-        authorName: true,
-        parentId: true,
-        author: {
-          select: {
-            name: true,
-            image: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    })
-
-    return NextResponse.json({ comments })
+    const targetId = searchParams.get('commentId')
+    if (targetId && targetId.length > 128) {
+      return NextResponse.json({ error: '评论标识不合法' }, { status: 400 })
+    }
+    const result = await prisma.$transaction(tx =>
+      getCommentPage(tx, post.id, pageNumber(searchParams.get('page')), targetId),
+    )
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     logger.error({ err: error }, '获取评论失败')
     return NextResponse.json({ error: '获取评论失败' }, { status: 500 })
   }
@@ -157,7 +144,7 @@ export async function POST(request: NextRequest) {
       select: { id: true, status: true, isProtected: true, passwordHash: true },
     })
 
-    if (!post) {
+    if (!post || post.status !== 'PUBLISHED') {
       return NextResponse.json({ error: '文章不存在' }, { status: 404 })
     }
 
@@ -170,11 +157,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '评论功能已关闭' }, { status: 403 })
     }
 
-    if (post.isProtected) {
+    if (post.isProtected && session?.user.role !== 'ADMIN') {
       if (!post.passwordHash) {
         return NextResponse.json({ error: '文章已加密' }, { status: 403 })
       }
-      const token = getPostUnlockTokenFromHeaders(request.headers)
+      const token = getPostUnlockTokenFromHeaders(request.headers, post.id)
       const unlocked = token
         ? verifyPostUnlockToken(token, post.id, post.passwordHash)
         : false
@@ -192,7 +179,7 @@ export async function POST(request: NextRequest) {
     const moderationRequired = moderationRequiredRaw ?? false
     const guestModerationRequired = guestModerationRequiredRaw ?? false
 
-    const body = await request.json()
+    const body = await readJsonBody(request)
     const { content, authorName, authorEmail, parentId } = body
 
     // 检查用户是否登录
@@ -201,7 +188,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证评论内容
-    if (!content || content.trim().length === 0) {
+    if (typeof content !== 'string' || content.trim().length === 0) {
       return NextResponse.json({ error: '评论内容不能为空' }, { status: 400 })
     }
 
@@ -338,11 +325,12 @@ export async function POST(request: NextRequest) {
       status: comment.status,
       createdAt: comment.createdAt,
       authorName: comment.authorName,
-      author: comment.author,
+      author: comment.author ? { name: comment.author.name, image: comment.author.image } : null,
     }
 
     return NextResponse.json({ comment: responseComment }, { status: 201 })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     logger.error({ err: error }, '创建评论失败')
     return NextResponse.json({ error: '创建评论失败' }, { status: 500 })
   }

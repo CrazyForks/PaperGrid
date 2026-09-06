@@ -1,0 +1,274 @@
+@property --arona-breath-range {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.06;
+}
+
+.scene {
+  --look-x: 0px;
+  --look-y: 0px;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+}
+
+.stage {
+  position: relative;
+  width: min(100cqw, calc(100cqh * var(--art-ratio)));
+  aspect-ratio: var(--art-ratio);
+  isolation: isolate;
+  transform: translate(var(--look-x), var(--look-y));
+  transition: transform 350ms ease-out;
+}
+
+.figure {
+  position: relative;
+  width: 100%;
+  transform-origin: var(--touch-x) var(--touch-y);
+  filter: drop-shadow(0 12px 20px #287cb718);
+  mask-image: linear-gradient(transparent, #000 7%, #000 87%, transparent);
+  pointer-events: none;
+}
+
+.figure[data-layered='true'] {
+  animation: bodyBreath 4.8s ease-in-out infinite;
+}
+
+.portrait,
+.headImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+  pointer-events: none;
+}
+
+.masks {
+  position: absolute;
+}
+
+.head,
+.headResponse {
+  position: absolute;
+  inset: 0;
+  transform-origin: 60% 54%;
+}
+
+.head {
+  animation: headSway 7.4s ease-in-out infinite;
+}
+
+.figure[data-active='false'],
+.figure[data-active='false'] .head {
+  animation-play-state: paused;
+}
+
+.expressionRegion {
+  position: absolute;
+  left: calc(568 / 1254 * 100%);
+  top: calc(328 / 1254 * 100%);
+  width: calc(406 / 1254 * 100%);
+  height: calc(236 / 1254 * 100%);
+}
+
+.expression {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background-image: var(--expressions, none);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+}
+
+.halfEyes {
+  background-position: left center;
+}
+
+.closedEyes {
+  background-position: right center;
+}
+
+.light {
+  position: absolute;
+  z-index: -1;
+  inset: 4% -6% 10%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #b8f0ff65, #e5f7ff20 55%, transparent 72%);
+  pointer-events: none;
+}
+
+.contact {
+  --arona-breath-range: 0.06;
+  position: absolute;
+  top: var(--touch-y);
+  left: var(--touch-x);
+  width: clamp(52px, 12cqw, 80px);
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  color: var(--hero-blue, #048fc8);
+  transition: --arona-breath-range 400ms ease;
+}
+
+.breathing {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: breathe 4.8s ease-in-out infinite;
+}
+
+.contactGlow {
+  position: absolute;
+  inset: -24%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffffa0 0%, #a5eeff55 22%, transparent 68%);
+  opacity: 0.7;
+  transition: opacity 300ms;
+}
+
+.orbit {
+  position: absolute;
+  inset: 10%;
+  color: #f8ffff;
+}
+
+.orbit svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 3px #28abdaba);
+}
+
+.orbit::before {
+  content: '';
+  position: absolute;
+  inset: 30%;
+  border: 2px solid #f8ffff;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #48c6e37a;
+}
+
+.contact:focus-visible {
+  --arona-breath-range: 0.18;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .contact:hover {
+    --arona-breath-range: 0.18;
+  }
+}
+
+.contact:hover .contactGlow,
+.contact:focus-visible .contactGlow {
+  opacity: 1;
+}
+
+.contact:focus-visible {
+  outline: 2px solid var(--hero-blue, #048fc8);
+  outline-offset: 8px;
+}
+
+.burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.burst i {
+  position: absolute;
+  inset: 10%;
+  border: 1px solid #25b9e4;
+  border-radius: 50%;
+  box-shadow: 0 0 14px #6cddff50;
+  opacity: 0;
+  animation: ripple 1.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.burst i:nth-child(2) {
+  animation-delay: 120ms;
+  border-color: #82e5fa;
+}
+
+.burst i:nth-child(3) {
+  animation-delay: 240ms;
+  border-style: dashed;
+  border-color: #68cce080;
+}
+
+:global(.dark) .light {
+  background: radial-gradient(ellipse, #2593bc28, #206a9210 55%, transparent 72%);
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(calc(1 - var(--arona-breath-range)));
+  }
+  50% {
+    transform: scale(calc(1 + var(--arona-breath-range)));
+  }
+}
+
+@keyframes bodyBreath {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.001, 1.006) rotate(0.08deg);
+  }
+}
+
+@keyframes headSway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  28% {
+    transform: rotate(-0.18deg);
+  }
+  72% {
+    transform: rotate(0.2deg);
+  }
+}
+
+@keyframes ripple {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.65);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage {
+    transform: none;
+  }
+  .stage,
+  .contact,
+  .contactGlow,
+  .orbit {
+    transition: none;
+  }
+  .breathing,
+  .burst i,
+  .figure[data-layered='true'],
+  .head {
+    animation: none;
+  }
+  .contact:active .contactGlow {
+    opacity: 1;
+  }
+}

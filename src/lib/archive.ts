@@ -1,6 +1,11 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import type { ArchiveMonthNode, ArchiveMonthPage, ArchivePostNode, ArchiveYearNode } from '@/types/archive'
+import type {
+  ArchiveMonthNode,
+  ArchiveMonthPage,
+  ArchivePostNode,
+  ArchiveYearNode,
+} from '@/types/archive'
 
 interface ArchiveTimelineResult {
   years: ArchiveYearNode[]
@@ -140,8 +145,11 @@ export async function getArchiveMonthPosts({
         id: true,
         title: true,
         slug: true,
+        publishedAt: true,
+        createdAt: true,
+        isProtected: true,
       },
-      orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
       skip,
       take: nextPageSize,
     }),
@@ -151,6 +159,8 @@ export async function getArchiveMonthPosts({
     id: post.id,
     title: post.title,
     slug: post.slug,
+    publishedAt: (post.publishedAt ?? post.createdAt).toISOString(),
+    isProtected: post.isProtected,
   }))
 
   return {

@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { GotifyServiceError, sendGotifyTestNotification } from '@/lib/notifications/gotify-service'
@@ -10,7 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const body = await request.json().catch(() => ({} as Record<string, unknown>))
+    const body = await readJsonBody(request)
     const title = typeof body.title === 'string' && body.title.trim()
       ? body.title.trim()
       : '测试推送 - 执笔为剑'
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('Gotify 测试推送失败:', error)
     if (error instanceof GotifyServiceError) {
       return NextResponse.json({ error: error.message }, { status: error.status })

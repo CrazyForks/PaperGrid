@@ -1,3 +1,4 @@
+import { pageNumber, pageSize } from '@/lib/pagination'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -13,14 +14,15 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get('page') || '1')
+    const page = pageNumber(searchParams.get('page'))
     const rawLimit = parseInt(searchParams.get('limit') || '20')
-    const limit = Math.min(Math.max(rawLimit, 1), 50)
+    const limit = Math.min(pageSize(rawLimit), 50)
     const search = searchParams.get('search')
     const role = searchParams.get('role')
     const safePage = Number.isFinite(page) && page > 0 ? page : 1
     const skip = (safePage - 1) * limit
 
+    if (role && !Object.values(Role).includes(role.toUpperCase() as Role)) return NextResponse.json({ error: '无效的用户角色' }, { status: 400 })
     const where = {
       ...(search && {
         OR: [

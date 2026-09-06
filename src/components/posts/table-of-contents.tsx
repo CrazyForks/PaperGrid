@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -67,7 +67,7 @@ export function TableOfContents({ headings }: { headings: HeadingItem[] }) {
     if (!isVisible) {
       container.scrollTo({
         top: activeItem.offsetTop - container.offsetHeight / 2,
-        behavior: 'smooth',
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
       })
     }
   }, [activeId])
@@ -75,22 +75,23 @@ export function TableOfContents({ headings }: { headings: HeadingItem[] }) {
   if (!headings || headings.length === 0) return null
 
   return (
-    <Card>
+    <Card className="ba-toc">
       <CardHeader>
         <h3 className="font-semibold">目录</h3>
       </CardHeader>
       <CardContent>
-        <div ref={containerRef} className="h-[400px] overflow-y-auto scroll-smooth custom-scrollbar">
-          <nav className="space-y-2 pr-4">
+        <div ref={containerRef} className="ba-toc-scroll overflow-y-auto scroll-smooth">
+          <nav className="space-y-1 pr-2" aria-label="文章目录">
             {headings.map((heading) => (
               <a
                 key={heading.id}
                 ref={activeId === heading.id ? activeRef : null}
                 href={`#${heading.id}`}
+                aria-current={activeId === heading.id ? 'location' : undefined}
                 className={cn(
-                  'block text-sm transition-all hover:text-blue-600 dark:hover:text-blue-400',
+                  'block text-sm transition-[color,background-color,translate] duration-200 ease-out hover:text-blue-600 dark:hover:text-blue-400',
                   activeId === heading.id
-                    ? 'text-blue-600 dark:text-blue-400 font-medium translate-x-1'
+                    ? 'translate-x-1 font-medium text-blue-600 dark:text-blue-400'
                     : 'text-gray-600 dark:text-gray-400',
                   heading.level === 1 ? 'pl-0' : heading.level === 2 ? 'pl-4' : 'pl-8'
                 )}
@@ -104,4 +105,3 @@ export function TableOfContents({ headings }: { headings: HeadingItem[] }) {
     </Card>
   )
 }
-

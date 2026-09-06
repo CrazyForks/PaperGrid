@@ -17,12 +17,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 
-const PERMISSIONS = [
-  { value: 'POST_READ', label: '查询文章' },
-  { value: 'POST_CREATE', label: '增加文章' },
-  { value: 'POST_UPDATE', label: '修改文章' },
-  { value: 'POST_DELETE', label: '删除文章' },
-]
+import { API_KEY_PERMISSIONS as PERMISSIONS } from '@/lib/api-key-permissions'
 
 type ApiKeyRecord = {
   id: string
@@ -173,7 +168,7 @@ export default function AdminApiKeysPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">接口密钥</h1>
-        <p className="text-muted-foreground">为插件创建 API Key，并配置文章权限</p>
+        <p className="text-muted-foreground">为插件创建 API Key，并配置接口权限</p>
       </div>
 
       <Card>

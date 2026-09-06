@@ -1,3 +1,4 @@
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -46,6 +47,7 @@ export async function GET() {
 
     return NextResponse.json({ apiKeys })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('获取 API Key 失败:', error)
     return NextResponse.json({ error: '获取 API Key 失败' }, { status: 500 })
   }
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
 
-    const body = await request.json()
+    const body = await readJsonBody(request)
     const name = typeof body.name === 'string' && body.name.trim().length > 0
       ? body.name.trim()
       : `API Key ${new Date().toISOString()}`
@@ -79,33 +81,38 @@ export async function POST(request: NextRequest) {
     const keyHash = hashApiKey(rawKey)
     const keyPrefix = rawKey.slice(0, 8)
 
-    const apiKey = await prisma.apiKey.create({
-      data: {
-        name,
-        keyHash,
-        keyPrefix,
-        createdById: session.user.id,
-        permissions: permissions.length > 0 ? permissions : ['POST_READ'],
-        enabled,
-        expiresAt: expiresAt ?? null,
-      },
-      select: {
-        id: true,
-        name: true,
-        keyPrefix: true,
-        createdById: true,
-        permissions: true,
-        enabled: true,
-        lastUsedAt: true,
-        lastUsedIp: true,
-        expiresAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const apiKey = await prisma.$transaction(async tx => {
+      const creator = await tx.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
+      if (creator?.role !== 'ADMIN') throw new RequestBodyError('未授权', 401)
+      return tx.apiKey.create({
+        data: {
+          name,
+          keyHash,
+          keyPrefix,
+          createdById: session.user.id,
+          permissions: permissions.length > 0 ? permissions : ['POST_READ'],
+          enabled,
+          expiresAt: expiresAt ?? null,
+        },
+        select: {
+          id: true,
+          name: true,
+          keyPrefix: true,
+          createdById: true,
+          permissions: true,
+          enabled: true,
+          lastUsedAt: true,
+          lastUsedIp: true,
+          expiresAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      })
     })
 
     return NextResponse.json({ apiKey, plainKey: rawKey }, { status: 201 })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('创建 API Key 失败:', error)
     return NextResponse.json({ error: '创建 API Key 失败' }, { status: 500 })
   }

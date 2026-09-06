@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { taxonomyNameChange } from '@/lib/slug'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -28,15 +29,18 @@ import {
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
+type TagRow = { id: string; name: string; slug: string; description?: string | null; _count: { posts: number } }
+
 export default function TagsPage() {
   const { toast } = useToast()
-  const [tags, setTags] = useState<any[]>([])
+  const [tags, setTags] = useState<TagRow[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingTag, setEditingTag] = useState<any>(null)
+  const [editingTag, setEditingTag] = useState<TagRow | null>(null)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  const [slugEdited, setSlugEdited] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -62,33 +66,21 @@ export default function TagsPage() {
     loadTags()
   }, [])
 
-  // 自动生成 slug
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-  }
-
   const handleNameChange = (value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      name: value,
-      slug: prev.slug || generateSlug(value),
-    }))
+    setFormData(prev => taxonomyNameChange(prev, value, slugEdited))
   }
 
   // 打开创建对话框
   const handleCreate = () => {
+    setSlugEdited(false)
     setEditingTag(null)
     setFormData({ name: '', slug: '' })
     setDialogOpen(true)
   }
 
   // 打开编辑对话框
-  const handleEdit = (tag: any) => {
+  const handleEdit = (tag: TagRow) => {
+    setSlugEdited(true)
     setEditingTag(tag)
     setFormData({
       name: tag.name,
@@ -325,9 +317,10 @@ export default function TagsPage() {
               <Input
                 id="tag-slug"
                 value={formData.slug}
-                onChange={(e) =>
+                onChange={(e) => {
+                  setSlugEdited(true)
                   setFormData({ ...formData, slug: e.target.value })
-                }
+                }}
                 placeholder="javascript"
                 disabled={saving}
               />

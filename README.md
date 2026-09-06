@@ -1,6 +1,6 @@
 <div align="center">
   <a name="readme-top"></a>
-  <img src="./public/logo.svg" alt="PaperGrid Logo" width="96" height="96" />
+  <img src="./public/logo.svg" alt="PaperGrid 蓝色光环图标" width="96" height="96" />
   <h1>PaperGrid - 执笔为剑</h1>
   <p>
     一个基于 Next.js App Router 的轻量化个人博客与后台管理系统。<br/>
@@ -18,16 +18,18 @@
 
 </div>
 
+> 新版 UI 已调整为 Blue Archive（蔚蓝档案）风格；如果不适应新界面，可以回退到此前的版本。
+
 ## 主要特性
 
 - Next.js App Router + React 19
 - Prisma ORM
 - NextAuth 认证
 - 管理后台（文章、标签、分类、评论、用户、系统设置、文件管理）
-- 文件管理（本地图片上传、预览、删除、URL 回填）
+- 文件管理（图片与 PDF / ZIP 附件、受保护文件鉴权、分页、预览、删除、URL 回填）
 - MDX 内容支持、代码高亮、数学公式与图表
 - 国际化与深色模式
-- 内置多套前台主题，可在 `管理后台 -> 样式` 一键切换（纸格笔记 / 终端机能 / 清透视窗 / 像素账本）
+- 统一的 Schale 蓝白界面：前台、阅读页和后台共用设计系统，支持深色模式与减少动态效果偏好
 
 ## 快速开始
 
@@ -57,12 +59,12 @@ services:
       # 可选：AI 向量索引使用的 SQLite 日志模式，默认 DELETE（稳定优先）
       # SQLITE_JOURNAL_MODE: "DELETE"
       # 反向代理后必须改成你的公网地址（https://your-domain），否则登录会报 UntrustedHost
-      NEXTAUTH_URL: "http://localhost:6066"
-      # 仅本地开发可临时开启（生产环境不要设置）
-      AUTH_TRUST_HOST: "1"
+      NEXTAUTH_URL: "https://blog.example.com"
+      # Nginx 必须覆盖此请求头，并限制应用仅由代理访问
+      TRUSTED_PROXY_HEADER: "x-real-ip"
       # 可选：启用 /api/init（一次性），必须设置且仅通过请求头 x-init-token 传入
-      # INIT_ADMIN_TOKEN: "请替换为随机字符串"
-      # 可选：自定义 /api/init 创建的管理员初始密码（不设置则为 admin123）
+      # INIT_ADMIN_TOKEN: "请替换为至少32字节的随机字符串"
+      # 可选：自定义 /api/init 创建的管理员初始密码（不设置则生成随机密码并写入数据卷）
       # ADMIN_INIT_PASSWORD: "请替换为强密码"
       # SMTP 邮件通知（可选）
       # SMTP_HOST: "smtp.example.com"
@@ -106,11 +108,7 @@ docker compose pull && docker compose up -d
 cd ~/papergrid && docker compose pull && docker compose up -d
 ```
 
-默认管理员账号：
-- 邮箱：`admin@example.com`
-- 密码：`admin123`
-
-首次登录请立即修改密码。
+初始管理员邮箱默认为 `admin@example.com`。首次启动生成随机密码，保存在数据卷 `/data/initial-admin.txt`；本地开发保存在 `.local/initial-admin.txt`。也可通过 `ADMIN_INIT_PASSWORD` 提供 12–72 字节的初始密码。
 
 ### 方式二：本地开发
 
@@ -147,7 +145,7 @@ NEXTAUTH_SECRET="your-secret-key-change-this-in-production"
 # Local media storage
 MEDIA_ROOT="/data/uploads"
 MEDIA_MAX_UPLOAD_MB="10"
-MEDIA_MAX_INPUT_PIXELS="40000000"
+MEDIA_MAX_INPUT_PIXELS="12000000"
 MEDIA_RESOLVE_CACHE_TTL_MS="30000" # 媒体元数据缓存(ms)
 INIT_ADMIN_TOKEN=""
 ADMIN_INIT_PASSWORD=""
@@ -218,7 +216,7 @@ SMTP 邮件通知说明：
 默认限制：
 - 单文件上限：`10MB`
 - 压缩策略默认：`平衡`
-- 游客权限：仅可通过图片 URL 查看（无上传/删除权限）
+- 游客仅能读取公开文件；加密文章中的图片和附件需要有效解锁凭证，草稿及孤立私有文件仅管理员可读。
 
 图片访问路径：
 - `GET /api/files/:id`
@@ -370,17 +368,15 @@ SKIP_DB_SEED=1 pnpm dev
 ## 种子数据说明
 
 `prisma/seed.ts` 会创建：
-- 默认管理员账号（若不存在）
+- 管理员由启动脚本单独初始化，种子文件不创建账号
 - 系统设置默认值（使用 upsert，幂等）
-
-如果你修改了 `seed.ts`，克隆者执行 `db:seed` 或启动开发服务器时会应用新的默认数据。
 
 ## 常用脚本
 
 ```bash
 pnpm dev         # 开发模式（含自动数据库准备）
 pnpm build       # 构建
-pnpm start       # 启动生产服务器
+node --env-file=.env .next/standalone/server.js # 启动独立生产包
 pnpm lint        # 代码检查
 pnpm db:prepare  # 手动执行数据库准备
 pnpm db:seed     # 仅执行种子数据
@@ -394,8 +390,7 @@ pnpm db:seed     # 仅执行种子数据
 docker compose pull && docker compose up -d
 ```
 
-默认会自动初始化 SQLite 数据库到数据卷，并创建默认管理员账号：
-`admin@example.com / admin123`，首次登录请尽快修改。
+首次启动自动迁移数据库、生成管理员随机密码并保存在 `/data/initial-admin.txt`。
 
 更新时建议执行：
 
@@ -446,3 +441,25 @@ package.json
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=xywml/PaperGrid&type=date&legend=top-left)](https://www.star-history.com/#xywml/PaperGrid&type=date&legend=top-left)
+
+
+## 升级
+
+更新前备份数据卷，保留原数据库、上传目录和 `NEXTAUTH_SECRET`。启动时自动执行数据库迁移；回退时同时恢复旧镜像和升级前的数据卷。
+
+## Nginx 反向代理
+
+将 `NEXTAUTH_URL` 设为公网地址，`TRUSTED_PROXY_HEADER` 设为 `x-real-ip`，应用端口绑定 `127.0.0.1`。
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:6066;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_read_timeout 130s;
+    client_max_body_size 51m;
+}
+```

@@ -1,6 +1,7 @@
 'use client'
 
 import 'md-editor-rt/lib/style.css'
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -72,6 +73,8 @@ function PostEditorContent() {
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  useUnsavedChanges(dirty)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
@@ -216,6 +219,7 @@ function PostEditorContent() {
         })
         .catch((error) => {
           console.error('加载文章失败:', error)
+          toast({ title: '加载文章失败', description: '请返回文章列表重试，避免覆盖未加载的数据。', variant: 'destructive' })
         })
         .finally(() => {
           setLoading(false)
@@ -261,22 +265,8 @@ function PostEditorContent() {
     }
   }, [])
 
-  // 自动生成 slug
-  const generateSlug = (title: string) => {
-    return title
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-  }
-
   const handleTitleChange = (value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      title: value,
-      slug: postId ? prev.slug : generateSlug(value),
-    }))
+    setFormData(prev => ({ ...prev, title: value }))
   }
 
   const handleSubmit = async (publish = false) => {
@@ -341,6 +331,7 @@ function PostEditorContent() {
         throw new Error(data.error || '保存失败')
       }
 
+      setDirty(false)
       // 保存成功
       if (!postId && data.post) {
         // 如果是新创建的文章,跳转到编辑页面
@@ -356,6 +347,8 @@ function PostEditorContent() {
 
           setFormData((prev) => ({
             ...prev,
+            content: data.post.content ?? prev.content,
+            coverImage: data.post.coverImage ?? '',
             status: publish ? savedStatus : prev.status,
             publishedAt: toInputDateTime(data.post.publishedAt),
           }))
@@ -397,6 +390,8 @@ function PostEditorContent() {
   return (
     <div
       ref={editorLayoutRef}
+      onChangeCapture={() => setDirty(true)}
+      onInputCapture={() => setDirty(true)}
       className="mx-auto flex min-h-0 w-full max-w-7xl flex-col overflow-hidden"
       style={editorLayoutHeight !== null ? { height: `${editorLayoutHeight}px` } : undefined}
     >
@@ -410,7 +405,7 @@ function PostEditorContent() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">{postId ? '编辑文章' : '新建文章'}</h1>
+            <h1 className="text-2xl font-bold">{postId ? '编辑文章' : '新建文章'}{dirty && <span className="ml-2 text-xs font-normal text-muted-foreground">未保存</span>}</h1>
             {postId && metaInfo.updatedAt && (
               <p className="text-muted-foreground mt-1 text-xs">
                 最后保存时间: {new Date(metaInfo.updatedAt).toLocaleString('zh-CN')}
@@ -480,8 +475,8 @@ function PostEditorContent() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="slug">URL Slug（自动生成）</Label>
-                <Input id="slug" value={formData.slug} placeholder="post-url-slug" disabled />
+                <Label htmlFor="slug">URL Slug（创建后固定）</Label>
+                <Input id="slug" value={formData.slug} placeholder="首次保存时生成随机短 ID" disabled />
               </div>
             </div>
 
@@ -641,7 +636,10 @@ function PostEditorContent() {
                   disabled={saving}
                   triggerText="从文件管理选择"
                   title="选择文章封面"
-                  onSelect={(url) => setFormData((prev) => ({ ...prev, coverImage: url }))}
+                  onSelect={(url) => {
+                    setFormData((prev) => ({ ...prev, coverImage: url }))
+                    setDirty(true)
+                  }}
                 />
               </div>
             </div>
@@ -699,7 +697,7 @@ function PostEditorContent() {
           <CardContent className="min-h-0 flex-1">
             <PostMarkdownEditor
               value={formData.content}
-              onChange={(content) => setFormData({ ...formData, content })}
+              onChange={(content) => { setDirty(true); setFormData({ ...formData, content }) }}
               disabled={saving}
               height="100%"
               onUploadingChange={setIsUploadingImages}

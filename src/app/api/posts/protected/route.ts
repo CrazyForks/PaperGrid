@@ -1,3 +1,4 @@
+import { auth } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getPostUnlockTokenFromHeaders, verifyPostUnlockToken } from '@/lib/post-protection'
@@ -33,11 +34,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '文章未加密' }, { status: 400 })
     }
 
+    const session = await auth()
+    if (session?.user.role === 'ADMIN') return NextResponse.json({ content: post.content }, { headers: { 'Cache-Control': 'private, no-store' } })
+
     if (!post.passwordHash) {
       return NextResponse.json({ error: '文章已加密' }, { status: 403 })
     }
 
-    const token = getPostUnlockTokenFromHeaders(request.headers)
+    const token = getPostUnlockTokenFromHeaders(request.headers, post.id)
     const unlocked = token
       ? verifyPostUnlockToken(token, post.id, post.passwordHash)
       : false

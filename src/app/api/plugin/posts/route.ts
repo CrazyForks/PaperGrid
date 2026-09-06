@@ -1,8 +1,11 @@
+import { pageNumber, pageSize } from '@/lib/pagination'
+import { RequestBodyError, bodyErrorResponse, readJsonBody } from '@/lib/request-body'
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { prisma, getPluginPostWriter } from '@/lib/prisma'
 import { PostStatus, type Prisma } from '@prisma/client'
-import slugify from 'slugify'
-import { requireApiKey } from '@/lib/api-keys'
+import { createPostWithSlug } from '@/lib/post-slug'
+import { requireApiKey, extractApiKey } from '@/lib/api-keys'
+import { idempotencyIdentity, readIdempotentResult } from '@/lib/api-idempotency'
 import readingTime from 'reading-time'
 import bcrypt from 'bcryptjs'
 import { revalidatePublicPostPaths } from '@/lib/post-revalidate'
@@ -94,8 +97,8 @@ async function hashPostPasswordIfNeeded(isProtected: boolean, password: unknown)
   if (raw.length < 4) {
     return { ok: false as const, error: '文章密码至少 4 位' }
   }
-  if (raw.length > 64) {
-    return { ok: false as const, error: '文章密码过长' }
+  if (Buffer.byteLength(raw) > 72) {
+    return { ok: false as const, error: '文章密码最多 72 字节' }
   }
 
   const passwordHash = await bcrypt.hash(raw, 10)
@@ -166,9 +169,9 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url)
-    const page = parseInt(searchParams.get('page') || '1')
+    const page = pageNumber(searchParams.get('page'))
     const rawLimit = parseInt(searchParams.get('limit') || '10')
-    const limit = Math.min(Math.max(rawLimit, 1), 50)
+    const limit = Math.min(pageSize(rawLimit), 50)
     const status = searchParams.get('status')
     const search = searchParams.get('search')
     const categoryId = searchParams.get('categoryId')
@@ -253,6 +256,7 @@ export async function GET(req: Request) {
       { headers: authResult.headers }
     )
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('插件获取文章列表失败:', error)
     return NextResponse.json({ error: '获取文章列表失败' }, { status: 500 })
   }
@@ -269,7 +273,12 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json()
+    const body = await readJsonBody(req)
+    const identity = idempotencyIdentity(authResult.apiKey!.id, req.headers.get('idempotency-key'), body, extractApiKey(req)!)
+    const replay = await readIdempotentResult<{ status: PostStatus; slug: string }>(prisma, identity)
+    if (replay) {
+      return NextResponse.json({ post: replay }, { status: 201, headers: { ...authResult.headers, 'Idempotency-Replayed': 'true' } })
+    }
     const {
       title,
       content,
@@ -380,16 +389,6 @@ export async function POST(req: Request) {
       )
     }
 
-    const baseSlug =
-      slugify(normalizedTitle, { lower: true, strict: true, trim: true }) ||
-      `post-${Date.now()}`
-    let slug = baseSlug
-    let suffix = 1
-    while (await prisma.post.findUnique({ where: { slug } })) {
-      slug = `${baseSlug}-${suffix}`
-      suffix += 1
-    }
-
     const categoryValidation = await assertCategoryExists(normalizedCategoryId ?? null)
     if (!categoryValidation.ok) {
       return NextResponse.json(
@@ -401,7 +400,8 @@ export async function POST(req: Request) {
 
     const authorId = await resolveAuthorId()
 
-    const post = await prisma.post.create({
+    let created = false
+    const post = await createPostWithSlug(slug => getPluginPostWriter(authResult.apiKey!.permissions.includes('POST_READ'), authResult.apiKey!.id, identity, () => { created = true }).post.create({
       data: {
         title: normalizedTitle,
         slug,
@@ -453,14 +453,15 @@ export async function POST(req: Request) {
           },
         },
       },
-    })
+    }))
 
-    if (post.status === PostStatus.PUBLISHED) {
+    if (created && post.status === PostStatus.PUBLISHED) {
       revalidatePublicPostPaths(post)
     }
 
     return NextResponse.json({ post }, { status: 201, headers: authResult.headers })
   } catch (error) {
+    if (error instanceof RequestBodyError) return bodyErrorResponse(error)
     console.error('插件创建文章失败:', error)
     return NextResponse.json({ error: '创建文章失败' }, { status: 500 })
   }

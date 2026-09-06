@@ -1,0 +1,9 @@
+{
+  "upstream": "https://github.com/Warren2060/ChillRound",
+  "release": "v1.805",
+  "asset": "https://github.com/Warren2060/ChillRound/releases/download/v1.805/ChillRoundM_v1.805.zip",
+  "original_font_sha256": "a7d2fb200b7336cbf7171c2205b7e4d75fdcf11f936da8a8e645cb061e7f0024",
+  "license": "OFL-1.1",
+  "changes": "Renamed to PaperGrid Rounded, converted to WOFF2, split into disjoint Unicode subsets. All upstream cmap characters preserved.",
+  "glyph_count": 12329
+}

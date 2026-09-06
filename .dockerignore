@@ -19,3 +19,12 @@ yarn-error.log*
 .pnpm-debug.log*
 
 README.md
+
+.local
+node-compile-cache
+*.sqlite
+*.sqlite-*
+tests
+
+# Runtime uploads must be migrated from a data volume, never baked into an image.
+public/uploads

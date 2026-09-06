@@ -24,7 +24,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { ViewCount } from '@/components/posts/view-count'
 import { RelatedPostsList } from '@/components/posts/related-posts-list'
 import { extractHeadingsFromMarkdown } from '@/lib/markdown'
-import { getReadingContentClasses, type MobileReadingBackground } from '@/lib/reading-style'
+import { getReadingContentClasses } from '@/lib/reading-style'
 import { MDXContentClient } from '@/components/posts/mdx-content-client'
 import { isInternalImageUrl } from '@/lib/image-url'
 
@@ -81,7 +81,6 @@ interface ProtectedPostPageProps {
   ownerName: string
   ownerRole: string
   defaultAvatarUrl: string
-  mobileReadingBackground: MobileReadingBackground
 }
 
 function getStorageKey(postId: string) {
@@ -98,10 +97,9 @@ export function ProtectedPostPage({
   ownerName,
   ownerRole,
   defaultAvatarUrl,
-  mobileReadingBackground,
 }: ProtectedPostPageProps) {
   const { cardClassName: contentCardClassName, contentClassName: contentPaddingClassName } =
-    getReadingContentClasses(mobileReadingBackground)
+    getReadingContentClasses()
   const [content, setContent] = useState<string | null>(null)
   const [headings, setHeadings] = useState<HeadingItem[]>([])
   const [unlockToken, setUnlockToken] = useState<string | null>(null)
@@ -109,14 +107,12 @@ export function ProtectedPostPage({
   const [loadError, setLoadError] = useState('')
 
   const loadContent = useCallback(
-    async (token: string) => {
+    async (token = '') => {
       setFetching(true)
       setLoadError('')
       try {
         const res = await fetch(`/api/posts/protected?slug=${post.slug}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         })
         const data = await res.json()
         if (!res.ok) {
@@ -129,7 +125,7 @@ export function ProtectedPostPage({
             setUnlockToken(null)
           }
           setContent(null)
-          setLoadError(data.error || '解锁已失效，请重新输入密码')
+          setLoadError(token ? data.error || '解锁已失效，请重新输入密码' : '')
           return
         }
         const nextContent = typeof data.content === 'string' ? data.content : ''
@@ -153,10 +149,8 @@ export function ProtectedPostPage({
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem(getStorageKey(post.id))
-      if (stored) {
-        setUnlockToken(stored)
-        loadContent(stored)
-      }
+      if (stored) setUnlockToken(stored)
+      loadContent(stored || '')
     } catch {
       // ignore
     }
@@ -179,101 +173,93 @@ export function ProtectedPostPage({
   const canShowContent = content !== null
 
   return (
-    <div className="min-h-screen">
-      <PostTitleSync title={post.title} />
+    <div className="schale-reading min-h-screen">
+      <PostTitleSync title={post.title} minutes={post.readingTime || 1} />
 
       {/* 文章头部 */}
-      <article className="bg-transparent py-12 sm:py-16">
+      <article className="schale-reading-header py-10 sm:py-14">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          {/* 返回按钮 */}
-          <Link
-            href="/posts"
-            className="mb-6 inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            返回文章列表
-          </Link>
+          <div className="ba-post-heading">
+            {/* 返回按钮 */}
+            <Link
+              href="/posts"
+              className="mb-6 inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              返回文章列表
+            </Link>
 
-          {/* 文章标题 */}
-          <h1 className="mb-6 font-serif text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl md:text-5xl dark:text-white">
-            {post.title}
-          </h1>
+            {/* 文章标题 */}
+            <h1 className="mb-6 font-serif text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl md:text-5xl dark:text-white">
+              {post.title}
+            </h1>
 
-          {/* 文章摘要 */}
-          {post.excerpt && (
-            <p className="mb-8 text-xl text-gray-600 dark:text-gray-400">{post.excerpt}</p>
-          )}
+            {/* 文章摘要 */}
+            {post.excerpt && (
+              <p className="mb-8 text-xl text-gray-600 dark:text-gray-400">{post.excerpt}</p>
+            )}
 
-          {/* 文章元信息 */}
-          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              <span>{post.author.name}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              <time>{post.publishedLabel}</time>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              <span>{post.readingTime || 1} 分钟阅读</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Eye className="h-4 w-4" />
-              <span>
-                {canShowContent ? (
-                  <ViewCount slug={post.slug} initialCount={post.viewCount?.count || 0} />
-                ) : (
-                  <ViewCount slug={post.slug} initialCount={post.viewCount?.count || 0} mode="read" />
-                )}{' '}
-                次阅读
-              </span>
-            </div>
-            {post.updatedAtLabel && (
-              <div className="pg-post-updated-meta text-primary flex items-center gap-2 font-medium">
-                <Edit3 className="h-4 w-4" />
-                <span>最后编辑于 {post.updatedAtLabel}</span>
+            {/* 文章元信息 */}
+            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                <span>{post.author.name}</span>
               </div>
-            )}
-            <div className="pg-lock-indicator text-xs">
-              <Lock className="h-3 w-3" />
-              加密文章
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                <time>{post.publishedLabel}</time>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                <span>{post.readingTime || 1} 分钟阅读</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Eye className="h-4 w-4" />
+                <span>
+                  {canShowContent ? (
+                    <ViewCount slug={post.slug} initialCount={post.viewCount?.count || 0} />
+                  ) : (
+                    <ViewCount
+                      slug={post.slug}
+                      initialCount={post.viewCount?.count || 0}
+                      mode="read"
+                    />
+                  )}{' '}
+                  次阅读
+                </span>
+              </div>
+              {post.updatedAtLabel && (
+                <div className="pg-post-updated-meta text-primary flex items-center gap-2 font-medium">
+                  <Edit3 className="h-4 w-4" />
+                  <span>最后编辑于 {post.updatedAtLabel}</span>
+                </div>
+              )}
+              <div className="pg-lock-indicator inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs">
+                <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span>加密文章</span>
+              </div>
             </div>
-          </div>
 
-          {/* 分类和标签 */}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {post.category && (
-              <Link href={`/posts?category=${post.category.slug}`}>
-                <Badge variant="secondary" className="pg-public-badge-secondary cursor-pointer">
-                  {post.category.name}
-                </Badge>
-              </Link>
-            )}
-            {post.postTags.map((pt) => (
-              <Link key={pt.tag.id} href={`/posts?tag=${pt.tag.slug}`}>
-                <Badge variant="outline" className="pg-public-badge-outline cursor-pointer">
-                  #{pt.tag.name}
-                </Badge>
-              </Link>
-            ))}
+            {/* 分类和标签 */}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {post.category && (
+                <Link href={`/posts?category=${post.category.slug}`}>
+                  <Badge variant="secondary" className="pg-public-badge-secondary cursor-pointer">
+                    {post.category.name}
+                  </Badge>
+                </Link>
+              )}
+              {post.postTags.map((pt) => (
+                <Link key={pt.tag.id} href={`/posts?tag=${pt.tag.slug}`}>
+                  <Badge variant="outline" className="pg-public-badge-outline cursor-pointer">
+                    #{pt.tag.name}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </article>
-
-      {/* 分割线与装饰 */}
-      <div className="mx-auto mb-6 max-w-6xl px-4 sm:px-6 lg:px-8">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center" aria-hidden="true">
-            <div className="pg-post-divider-line w-full border-t border-dashed border-gray-300 dark:border-gray-700"></div>
-          </div>
-          <div className="relative flex justify-start">
-            <span className="pg-post-divider-icon pr-3 text-gray-400 dark:text-gray-600">
-              <Scissors className="h-5 w-5" />
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* 文章内容 */}
       <section className="py-12">
@@ -286,6 +272,7 @@ export function ProtectedPostPage({
                 <div className="mb-8 overflow-hidden rounded-lg">
                   {isInternalImageUrl(post.coverImage) ? (
                     <Image
+                      unoptimized
                       src={post.coverImage}
                       alt={post.title}
                       width={1600}
@@ -390,7 +377,7 @@ export function ProtectedPostPage({
             {/* 侧边栏 */}
             <div className="lg:col-span-1">
               {/* 目录 */}
-              <div className="sticky top-20">
+              <div className="sticky top-28">
                 <TableOfContents headings={headings} />
 
                 {/* 作者信息 */}
@@ -400,7 +387,7 @@ export function ProtectedPostPage({
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-12 w-12 border-2 border-gray-900 dark:border-white">
+                      <Avatar className="border-primary/20 h-12 w-12 border-2">
                         <AvatarImage src={defaultAvatarUrl || post.author.image || undefined} />
                         <AvatarFallback className="bg-gray-50 font-serif text-lg font-bold text-gray-900 dark:bg-gray-800 dark:text-white">
                           {(ownerName || post.author.name || '千叶').charAt(0).toUpperCase()}

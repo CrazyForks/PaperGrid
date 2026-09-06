@@ -1,4 +1,4 @@
-import { ChatOpenAI } from '@langchain/openai'
+import { publicFetch } from '@/lib/public-network'
 import { getAiRuntimeSettings, type AiRuntimeSettings } from '@/lib/ai/config'
 import { normalizeAndValidateAiBaseUrl } from '@/lib/ai/security'
 
@@ -11,8 +11,7 @@ type AiChatModelOverrides = {
 const OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS = 262144
 
 function toClientConfiguration(baseUrl: string) {
-  if (!baseUrl.trim()) return undefined
-  return { baseURL: normalizeAndValidateAiBaseUrl(baseUrl) }
+  return { baseURL: normalizeAndValidateAiBaseUrl(baseUrl), fetch: publicFetch }
 }
 
 export function extractMessageText(content: unknown): string {
@@ -61,6 +60,7 @@ export async function createAiChatModel(input: {
       ? input.overrides.model.trim()
       : settings.chatModel
 
+  const { ChatOpenAI } = await import('@langchain/openai')
   return new ChatOpenAI({
     apiKey: settings.apiKey,
     model: modelName,
@@ -68,11 +68,9 @@ export async function createAiChatModel(input: {
     maxTokens: maxOutputTokens,
     streaming: true,
     streamUsage: false,
-    ...(settings.baseUrl
-      ? {
-          configuration: toClientConfiguration(settings.baseUrl),
-        }
-      : {}),
+    timeout: 90000,
+    maxRetries: 1,
+    configuration: toClientConfiguration(settings.baseUrl),
   })
 }
 
@@ -90,13 +88,13 @@ function normalizeEmbeddingVector(value: unknown) {
       }
       return null
     })
-    .filter((item): item is number => item !== null)
 
-  if (!vector.length) {
+
+  if (!vector.length || vector.some(item => item === null)) {
     return null
   }
 
-  return vector
+  return vector as number[]
 }
 
 function toRecord(value: unknown) {
@@ -232,7 +230,7 @@ async function requestEmbeddings(params: {
   let response: Response
   try {
     try {
-      response = await fetch(endpoint, {
+      response = await publicFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

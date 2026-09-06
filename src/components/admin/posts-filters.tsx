@@ -34,11 +34,14 @@ export function PostsFilters({
   const [categoryId, setCategoryId] = useState(initialCategoryId)
   const mountedRef = useRef(false)
 
-  useEffect(() => {
+  const initialKey = JSON.stringify([initialQuery, initialStatus, initialCategoryId])
+  const [previousInitialKey, setPreviousInitialKey] = useState(initialKey)
+  if (previousInitialKey !== initialKey) {
+    setPreviousInitialKey(initialKey)
     setQuery(initialQuery)
     setStatus(initialStatus)
     setCategoryId(initialCategoryId)
-  }, [initialQuery, initialStatus, initialCategoryId])
+  }
 
   useEffect(() => {
     if (!mountedRef.current) {

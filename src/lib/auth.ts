@@ -6,7 +6,8 @@ import { PrismaAdapter } from '@auth/prisma-adapter'
 import { prisma } from './prisma'
 import { getSetting } from './settings'
 import bcrypt from 'bcryptjs'
-import { getClientIp, rateLimit } from './rate-limit'
+import { getClientIp, rateLimitLogin } from './rate-limit'
+import { sessionStamp } from './session-stamp'
 
 class RateLimitError extends CredentialsSignin {
   code = 'rate_limited'
@@ -30,23 +31,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: '密码', type: 'password' },
       },
       async authorize(credentials, request) {
-        if (!credentials?.email || !credentials?.password) {
+        if (typeof credentials?.email !== 'string' || typeof credentials?.password !== 'string' ||
+            credentials.email.length > 254 || Buffer.byteLength(credentials.password) > 72) {
           return null
         }
 
         const clientIp = request ? getClientIp(request) : 'unknown'
-        const emailKey = String(credentials.email).toLowerCase()
-        const limit = rateLimit(`login:${clientIp}:${emailKey}`, {
-          windowMs: 5 * 60 * 1000,
-          max: 30,
-        })
-
-        if (!limit.ok) {
+        if (!rateLimitLogin(clientIp, credentials.email).ok) {
           throw new RateLimitError()
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email: credentials.email.trim() },
         })
 
         if (!user || !user.password) {
@@ -91,10 +87,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return true
     },
     async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.role = (user as any).role
-      }
+      const id = user?.id || (typeof token.id === 'string' ? token.id : undefined)
+      if (!id) return null
+      const current = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, email: true, password: true, role: true, sessionVersion: true, name: true, image: true },
+      })
+      if (!current) return null
+      const stamp = sessionStamp(current)
+      if (!user && token.stamp !== stamp) return null
+      token.id = current.id
+      token.role = current.role
+      token.stamp = stamp
+      token.name = current.name
+      token.email = current.email
+      token.picture = current.image
       return token
     },
     async session({ session, token }) {

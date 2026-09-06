@@ -1,51 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <mask id="pencilMask">
-      <rect width="512" height="512" fill="white" />
-      <g transform="translate(256,256) rotate(45)">
-        <g transform="translate(0,-15)">
-          <rect x="-58" y="-188" width="116" height="55" rx="12" ry="12" fill="black" />
-          <rect x="-58" y="-148" width="116" height="18" fill="black" />
-          <rect x="-58" y="-130" width="116" height="223" fill="black" />
-          <path d="M-58 90 L58 90 L0 194 Z" fill="black" />
-        </g>
-      </g>
-    </mask>
-  </defs>
-
-  <rect width="512" height="512" fill="#FFFFFF" />
-
-  <g mask="url(#pencilMask)">
-    <line x1="140" y1="16" x2="140" y2="496" stroke="#A0A0A0" stroke-width="20" />
-    <line x1="256" y1="16" x2="256" y2="496" stroke="#A0A0A0" stroke-width="20" />
-    <line x1="372" y1="16" x2="372" y2="496" stroke="#A0A0A0" stroke-width="20" />
-    <line x1="16" y1="140" x2="496" y2="140" stroke="#A0A0A0" stroke-width="20" />
-    <line x1="16" y1="256" x2="496" y2="256" stroke="#A0A0A0" stroke-width="20" />
-    <line x1="16" y1="372" x2="496" y2="372" stroke="#A0A0A0" stroke-width="20" />
-    <rect x="16" y="16" width="480" height="480" fill="none" stroke="#1A1A1A" stroke-width="28" rx="4" ry="4" />
-  </g>
-
-  <g transform="translate(256,256) rotate(45)">
-    <g transform="translate(0,-15)">
-      <rect x="-52" y="-182" width="104" height="46" rx="10" ry="10" fill="#888888" />
-      <rect x="-52" y="-150" width="104" height="14" fill="#888888" />
-      <rect x="-52" y="-136" width="104" height="16" fill="#606060" />
-      <line x1="-52" y1="-132" x2="52" y2="-132" stroke="#484848" stroke-width="3" />
-      <line x1="-52" y1="-126" x2="52" y2="-126" stroke="#484848" stroke-width="3" />
-      <rect x="-52" y="-120" width="104" height="210" fill="#E8E8E8" />
-      <rect x="-52" y="-120" width="35" height="210" fill="#D0D0D0" />
-      <rect x="17" y="-120" width="35" height="210" fill="#D0D0D0" />
-      <line x1="-17" y1="-120" x2="-17" y2="90" stroke="#B0B0B0" stroke-width="3" />
-      <line x1="17" y1="-120" x2="17" y2="90" stroke="#B0B0B0" stroke-width="3" />
-      <path d="M-52 90 L52 90 L0 188 Z" fill="#E0E0E0" />
-      <path d="M-52 90 L-17 90 L0 188 Z" fill="#C8C8C8" />
-      <path d="M52 90 L17 90 L0 188 Z" fill="#C8C8C8" />
-      <path d="M-14 162 L14 162 L0 188 Z" fill="#555555" />
-      <path d="M-6 176 L6 176 L0 188 Z" fill="#1A1A1A" />
-      <path d="M-52 -182 Q-52 -192 -42 -192 L42 -192 Q52 -192 52 -182 L52 90 L-52 90 Z" fill="none" stroke="#1A1A1A" stroke-width="6" stroke-linejoin="round" />
-      <path d="M-52 90 L52 90 L0 188 Z" fill="none" stroke="#1A1A1A" stroke-width="6" stroke-linejoin="round" />
-      <line x1="-52" y1="-136" x2="52" y2="-136" stroke="#1A1A1A" stroke-width="4" />
-      <line x1="-52" y1="-120" x2="52" y2="-120" stroke="#1A1A1A" stroke-width="4" />
-    </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g transform="translate(32 32) skewX(-8) translate(-32 -32)">
+    <path fill="#9be4fa" transform="translate(4 3)" d="M16 6h35q3 0 3 3v38q0 11-11 11H9q-3 0-3-3V17Q6 6 16 6Z"/>
+    <path fill="#19b6ed" d="M16 6h35q3 0 3 3v38q0 11-11 11H9q-3 0-3-3V17Q6 6 16 6Z"/>
+    <ellipse cx="30" cy="32" rx="14" ry="7.7" fill="none" stroke="#fff" stroke-width="2.6" transform="rotate(-25 30 32)"/>
   </g>
 </svg>

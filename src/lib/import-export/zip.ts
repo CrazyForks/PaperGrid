@@ -1,5 +1,5 @@
 import { promisify } from 'node:util'
-import { deflateRawSync, inflateRaw } from 'node:zlib'
+import { deflateRaw, inflateRaw } from 'node:zlib'
 
 export type ZipEntryInput = {
   name: string
@@ -95,7 +95,7 @@ function findEocdOffset(buffer: Buffer) {
   return -1
 }
 
-export function createZip(entries: ZipEntryInput[]) {
+export async function createZip(entries: ZipEntryInput[]) {
   const localChunks: Buffer[] = []
   const centralChunks: Buffer[] = []
   let localOffset = 0
@@ -104,7 +104,7 @@ export function createZip(entries: ZipEntryInput[]) {
     const fileName = sanitizeEntryName(entry.name)
     const fileNameBuffer = Buffer.from(fileName, 'utf8')
     const source = Buffer.from(entry.data)
-    const compressed = deflateRawSync(source)
+    const compressed = await promisify(deflateRaw)(source, { level: 6 })
     const useDeflate = compressed.length < source.length
     const method = useDeflate ? ZIP_METHOD_DEFLATE : ZIP_METHOD_STORE
     const payload = useDeflate ? compressed : source
