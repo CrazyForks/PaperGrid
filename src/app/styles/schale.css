@@ -1076,6 +1076,10 @@
 .page-enter {
   animation: ba-page-in var(--motion-panel) var(--motion-ease);
 }
+/* A transformed ancestor would pin the fixed loader to the scrolled document. */
+.page-enter:has([data-route-loading]) {
+  animation: none;
+}
 .ba-arrived {
   animation: ba-reveal 0.55s var(--ba-ease) both;
 }

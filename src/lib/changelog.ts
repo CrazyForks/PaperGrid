@@ -5,6 +5,9 @@ export type ChangelogItem = {
 }
 
 export const CHANGELOG: ChangelogItem[] = [
+  { version: '1.1.2', date: '2026-09-06', highlights: [
+    '移除首屏跳过按钮，修复手机端加载动画错位与页面切换回弹。',
+  ] },
   { version: '1.1.1', date: '2026-09-06', highlights: [
     '修复 Docker 镜像缺少启动依赖导致首次部署和升级失败的问题。',
   ] },

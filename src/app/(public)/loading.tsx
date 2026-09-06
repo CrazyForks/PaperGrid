@@ -4,8 +4,10 @@ import styles from '@/components/loading/loading.module.css'
 export default function Loading() {
   return (
     <div className={styles.route} role="status" data-route-loading>
-      <TriangleLoader />
-      <span>正在加载…</span>
+      <div className={styles.routeOverlay}>
+        <TriangleLoader />
+        <span>正在加载…</span>
+      </div>
     </div>
   )
 }

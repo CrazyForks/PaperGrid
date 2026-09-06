@@ -57,7 +57,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const theme = await getSetting<string>('site.defaultTheme', 'system')
   return (
-    <html lang="zh" suppressHydrationWarning>
+    <html lang="zh" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body id="papergrid-page" className="font-sans antialiased">
         <SessionProvider>
           <ThemeProvider

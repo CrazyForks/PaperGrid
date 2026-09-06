@@ -117,9 +117,6 @@ export function StartupLoader() {
       <span className={styles.percent} aria-hidden="true">
         {progress}%
       </span>
-      <button className={styles.skip} onClick={() => setVisible(false)}>
-        直接进入
-      </button>
       <noscript>
         <style>{'[data-startup-loader] { display: none !important; }'}</style>
       </noscript>
