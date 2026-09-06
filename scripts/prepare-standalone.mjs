@@ -1,8 +1,13 @@
-import { cp, mkdir, copyFile, access, rm } from 'node:fs/promises'
+import { cp, mkdir, copyFile, access, rm, realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { getLoadablePath } from 'sqlite-vec'
 
 const output = '.next/standalone'
+// bootstrap-admin runs outside Next.js tracing. bcryptjs has no runtime dependencies;
+// copy the installed package itself so pnpm's development symlink cannot escape the image.
+const bcryptDestination = path.join(output, 'node_modules/bcryptjs')
+await rm(bcryptDestination, { recursive: true, force: true })
+await cp(await realpath('node_modules/bcryptjs'), bcryptDestination, { recursive: true })
 // These committed assets are required by the default Hero; never ship a partial character.
 for (const asset of [
   'arona-touch-eyes.webp',

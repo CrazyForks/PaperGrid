@@ -1,6 +1,6 @@
 {
   "name": "my-blog",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "scripts": {
     "postinstall": "node scripts/prepare-db.mjs",
@@ -14,7 +14,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "test": "node --import tsx --test tests/*.test.ts tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "test:integration": "node --env-file=.env tests/http.integration.mjs"
+    "test:integration": "node --env-file=.env tests/http.integration.mjs",
+    "test:image": "node scripts/test-image-startup.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

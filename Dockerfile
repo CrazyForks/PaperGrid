@@ -87,6 +87,8 @@ RUN chmod +x /entrypoint.sh \
   && chown -R nextjs:nodejs /app/.next /app/public /app/prisma /entrypoint.sh
 
 USER nextjs
+# Startup scripts run outside Next.js bundles; fail the build if their imports are missing.
+RUN node --input-type=module -e "await Promise.all(['@prisma/client', 'bcryptjs', 'htmlparser2'].map(name => import(name)))"
 EXPOSE 3000
 ENV PORT=3000
 

@@ -5,6 +5,9 @@ export type ChangelogItem = {
 }
 
 export const CHANGELOG: ChangelogItem[] = [
+  { version: '1.1.1', date: '2026-09-06', highlights: [
+    '修复 Docker 镜像缺少启动依赖导致首次部署和升级失败的问题。',
+  ] },
   { version: '1.1.0', date: '2026-09-05', highlights: [
     'Schale 蓝白界面：重构首页、阅读布局、移动导航、登录页与创作工作室。',
     '强化会话撤销、加密图片和附件、请求边界、反向代理限流与公网 HTTPS 外发。',

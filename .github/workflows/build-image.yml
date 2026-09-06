@@ -20,6 +20,11 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: 计算版本标签并校验一致性
         id: meta
         run: |
@@ -60,6 +65,11 @@ jobs:
         env:
           IMAGE: ${{ env.IMAGE }}
         run: ./scripts/build-image.sh
+
+      - name: 验证镜像首次启动与旧数据升级
+        env:
+          IMAGE: ${{ env.IMAGE }}:${{ steps.meta.outputs.tag_version }}
+        run: node scripts/test-image-startup.mjs
 
       - name: 推送版本标签
         env:
