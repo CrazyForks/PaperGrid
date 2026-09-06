@@ -117,7 +117,7 @@ export default async function PostPage({ params }: PostPageProps) {
   )
 
   return (
-    <div className="schale-reading min-h-screen">
+    <div className="schale-reading">
       <PostTitleSync title={post.title} minutes={post.readingTime || 1} />
       {/* 文章头部 */}
       <article className="schale-reading-header py-10 sm:py-14">

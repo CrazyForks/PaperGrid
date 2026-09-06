@@ -173,7 +173,7 @@ export function ProtectedPostPage({
   const canShowContent = content !== null
 
   return (
-    <div className="schale-reading min-h-screen">
+    <div className="schale-reading">
       <PostTitleSync title={post.title} minutes={post.readingTime || 1} />
 
       {/* 文章头部 */}

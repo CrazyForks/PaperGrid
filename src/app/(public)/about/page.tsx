@@ -117,7 +117,7 @@ export default async function AboutPage() {
         ]
 
   return (
-    <div className="min-h-screen">
+    <div>
       {/* 页面头部 */}
       <ArchiveHeading title="关于我" />
 

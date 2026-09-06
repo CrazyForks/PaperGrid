@@ -19,7 +19,7 @@ export default async function ArchivePage() {
   const { years, totalPosts } = await getArchiveTimeline()
 
   return (
-    <div className="pg-archive-page min-h-screen">
+    <div className="pg-archive-page">
       <ArchiveHeading title="文章归档" />
 
       <section className="ba-archive-body">

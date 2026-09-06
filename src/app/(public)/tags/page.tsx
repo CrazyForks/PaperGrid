@@ -47,7 +47,7 @@ export default async function TagsPage() {
   const sortedTags = [...tags].sort((a, b) => b._count.posts - a._count.posts)
 
   return (
-    <div className="ba-tags-page min-h-screen">
+    <div className="ba-tags-page">
       {/* 页面头部 */}
       <ArchiveHeading title="话题索引" description="循着一个关键词，发现更多。" />
 

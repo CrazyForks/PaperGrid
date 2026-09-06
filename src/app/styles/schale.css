@@ -681,6 +681,7 @@
 .pg-public-footer {
   background: var(--card) !important;
   border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .schale-reading-header {
   position: relative;
@@ -1212,9 +1213,6 @@
 @media (max-width: 767px) {
   .ba-container {
     width: calc(100% - 32px);
-  }
-  .schale-site {
-    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
   .schale-nav-inner {
     height: var(--site-nav-height);

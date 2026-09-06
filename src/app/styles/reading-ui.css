@@ -839,9 +839,6 @@
   }
 }
 @media (max-width: 767px) {
-  .schale-site {
-    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
-  }
   .schale-nav-inner {
     padding-inline: 12px;
   }

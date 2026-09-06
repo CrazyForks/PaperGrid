@@ -47,6 +47,17 @@ function resolveApiErrorMessage(payload: unknown, fallback: string) {
   return fallback
 }
 
+function AiSettingsLink() {
+  return (
+    <Button asChild variant="ghost" size="sm">
+      <Link href="/admin/ai/settings">
+        <Settings2 className="mr-2 h-4 w-4" />
+        AI 设置
+      </Link>
+    </Button>
+  )
+}
+
 export function AdminAiChatPage() {
   const { toast } = useToast()
   const [threadPage, setThreadPage] = useState(1)
@@ -336,8 +347,9 @@ export function AdminAiChatPage() {
 
   if (loading) {
     return (
-      <div className="flex h-[calc(100dvh-10rem)] min-h-0 items-center justify-center rounded-xl border bg-background md:min-h-[680px]">
+      <div className="flex h-[calc(100dvh-10rem)] min-h-0 flex-col items-center justify-center gap-4 rounded-xl border bg-background md:min-h-[680px]">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <AiSettingsLink />
       </div>
     )
   }
@@ -353,15 +365,18 @@ export function AdminAiChatPage() {
           <div className="text-xs text-muted-foreground">
             {loadError || '未能初始化聊天会话，请重试。'}
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void initializePage()
-            }}
-          >
-            重新加载
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void initializePage()
+              }}
+            >
+              重新加载
+            </Button>
+            <AiSettingsLink />
+          </div>
         </div>
       </div>
     )
@@ -470,12 +485,7 @@ export function AdminAiChatPage() {
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquarePlus className="h-4 w-4" />}
               </Button>
 
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/admin/ai/settings">
-                  <Settings2 className="mr-2 h-4 w-4" />
-                  AI 设置
-                </Link>
-              </Button>
+              <AiSettingsLink />
             </div>
           </div>
 

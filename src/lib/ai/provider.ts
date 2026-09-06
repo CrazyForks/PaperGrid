@@ -184,14 +184,22 @@ function extractProviderErrorMessage(payload: unknown) {
   return ''
 }
 
-function shouldRetryWithoutDimensions(message: string) {
-  const normalized = message.toLowerCase()
+class EmbeddingRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+  }
+}
+
+function shouldRetryWithoutDimensions(error: unknown) {
+  if (!(error instanceof EmbeddingRequestError) || ![400, 422].includes(error.status)) return false
+  const normalized = error.message.toLowerCase()
   if (!normalized) return false
   return (
     normalized.includes('dimension') ||
     normalized.includes('dimensions') ||
     normalized.includes('unknown parameter') ||
-    normalized.includes('unexpected field')
+    normalized.includes('unexpected field') ||
+    normalized.includes('parameter is invalid')
   )
 }
 
@@ -255,7 +263,7 @@ async function requestEmbeddings(params: {
   const errorMessage = extractProviderErrorMessage(payload)
 
   if (!response.ok) {
-    throw new Error(errorMessage || `Embedding 请求失败（HTTP ${response.status}）`)
+    throw new EmbeddingRequestError(errorMessage || `Embedding 请求失败（HTTP ${response.status}）`, response.status)
   }
 
   const vectors = parseEmbeddingsPayload(payload)
@@ -283,15 +291,17 @@ export async function runOpenAiCompatibleEmbeddings(input: {
     throw new Error('缺少 AI API Key')
   }
 
+  // BGE-M3 has a fixed 1024-dimensional output; its API need not accept dimensions.
+  const useDimensions = !/(?:^|\/)bge-m3$/i.test(settings.embeddingModel.trim())
+
   try {
     return await requestEmbeddings({
       settings,
       texts,
-      useDimensions: true,
+      useDimensions,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (!shouldRetryWithoutDimensions(message)) {
+    if (!useDimensions || !shouldRetryWithoutDimensions(error)) {
       throw error
     }
 

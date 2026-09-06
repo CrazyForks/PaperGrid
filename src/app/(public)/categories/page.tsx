@@ -42,7 +42,7 @@ export default async function CategoriesPage() {
   ])
 
   return (
-    <div className="ba-categories-page min-h-screen">
+    <div className="ba-categories-page">
       {/* 页面头部 */}
       <ArchiveHeading
         title="分类收藏"

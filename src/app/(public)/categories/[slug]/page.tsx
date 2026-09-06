@@ -111,7 +111,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const totalPages = Math.ceil(totalPosts / pageSize)
 
   return (
-    <div className="min-h-screen">
+    <div>
       {/* 页面头部 */}
       <section className="py-12 sm:py-16 bg-transparent">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

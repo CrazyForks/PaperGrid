@@ -8,6 +8,7 @@ import {
   indexPostById,
   markPostIndexQueued,
   rebuildAllPostIndex,
+  type AiRebuildIndexResult,
 } from '@/lib/ai/vector-store'
 
 export type AiIndexTaskType = 'rebuild' | 'post-upsert' | 'post-delete'
@@ -281,18 +282,28 @@ function createTaskId() {
   return crypto.randomUUID()
 }
 
+export function getRebuildTaskError(result: unknown): string | null {
+  if (!result || typeof result !== 'object') return null
+  const summary = result as Partial<AiRebuildIndexResult>
+  if (typeof summary.failed !== 'number' || !Number.isFinite(summary.failed) || summary.failed <= 0) return null
+  const firstError = Array.isArray(summary.errors) ? summary.errors[0]?.error : null
+  return `索引重建有 ${summary.failed} 篇文章失败${typeof firstError === 'string' && firstError ? `：${firstError}` : ''}`
+}
+
 function toPublicTask(task: AiIndexTaskRecord): PublicAiIndexTaskRecord {
+  const rebuildError = task.type === 'rebuild' && task.status === 'succeeded'
+    ? getRebuildTaskError(task.result) : null
   return {
     id: task.id,
     type: task.type,
-    status: task.status,
+    status: rebuildError ? 'failed' : task.status,
     source: task.source,
     postId: task.postId,
     createdAt: task.createdAt,
     startedAt: task.startedAt,
     finishedAt: task.finishedAt,
     requestedBy: task.requestedBy,
-    error: task.error,
+    error: rebuildError || task.error,
     result: task.result,
   }
 }
@@ -388,6 +399,8 @@ function ensureWorkerRunning() {
 
       try {
         task.result = await executeTask(task)
+        const rebuildError = task.type === 'rebuild' ? getRebuildTaskError(task.result) : null
+        if (rebuildError) throw new Error(rebuildError)
         task.status = 'succeeded'
       } catch (error) {
         task.status = 'failed'
