@@ -1,10 +1,9 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { ArrowUpRight, Github, Mail } from 'lucide-react'
 import { isValidHref } from '@/lib/utils'
-import { AronaVisual } from './arona-visual'
+import { HeroCharacter } from './hero-character'
 import { HeroInteraction, HeroWave } from './hero-interaction'
 import styles from './hero-section.module.css'
 
@@ -83,24 +82,11 @@ export function HeroSection({ settings = {} }: { settings?: Record<string, unkno
                 <ArrowUpRight size={16} aria-hidden="true" />
               </Link>
             </div>
-            {touchArtwork && <HeroWave />}
+            <HeroWave />
           </div>
 
           <div className={`${styles.visual} ${touchArtwork ? styles.visualTouch : ''}`}>
-            {touchArtwork ? (
-              <AronaVisual artwork={touchArtwork} />
-            ) : (
-              <Image
-                unoptimized
-                className={styles.character}
-                src={arona.src}
-                alt="碧蓝档案的阿罗娜"
-                width={arona.width}
-                height={arona.height}
-                fetchPriority="high"
-                decoding="async"
-              />
-            )}
+            <HeroCharacter artwork={touchArtwork} fallback={arona} />
           </div>
         </div>
 

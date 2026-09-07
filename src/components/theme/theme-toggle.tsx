@@ -6,7 +6,7 @@ import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
   React.useEffect(() => {
@@ -26,10 +26,10 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       className="pg-public-nav-icon-btn"
-      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      aria-label="切换主题"
+      onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+      aria-label={resolvedTheme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
     >
-      {theme === 'dark' ? (
+      {resolvedTheme === 'dark' ? (
         <Sun className="h-5 w-5" />
       ) : (
         <Moon className="h-5 w-5" />

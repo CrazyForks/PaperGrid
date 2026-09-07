@@ -6,6 +6,7 @@ import { useHeroInteraction } from './hero-interaction'
 import styles from './arona-visual.module.css'
 
 export type AronaArtwork = {
+  character?: 'arona' | 'plana'
   src: string
   width: number
   height: number
@@ -39,7 +40,9 @@ export function AronaPortrait({
   const [active, setActive] = useState(false)
   const [loadedExpressions, setLoadedExpressions] = useState<string>()
   const { subscribe } = useHeroInteraction()
-  const hasLayers = Boolean(artwork.expressions)
+  const isPlana = artwork.character === 'plana'
+  // Plana keeps a single intact portrait; only the visible eye is overlaid.
+  const hasLayers = Boolean(artwork.expressions) && !isPlana
   const expressionReady = Boolean(artwork.expressions && loadedExpressions === artwork.expressions)
 
   useEffect(() => {
@@ -91,6 +94,31 @@ export function AronaPortrait({
   }, [active, artwork.expressions, expressionReady])
 
   useEffect(() => {
+    const element = figure.current
+    if (!active || !isPlana || !element) return
+    let approach: Animation | undefined
+    const unsubscribe = subscribe(() => {
+      const currentScale = getComputedStyle(element).scale
+      approach?.cancel()
+      // Scale the intact portrait and its eye overlay around the anchored fingertip.
+      // The individual scale property leaves the CSS breathing transform running.
+      approach = element.animate(
+        [
+          { scale: currentScale === 'none' ? '1' : currentScale },
+          { scale: '1.009', offset: 0.35 },
+          { scale: '1.0075', offset: 0.55 },
+          { scale: '1' },
+        ],
+        { duration: 1400, easing: 'ease-in-out' }
+      )
+    })
+    return () => {
+      unsubscribe()
+      approach?.cancel()
+    }
+  }, [active, isPlana, subscribe])
+
+  useEffect(() => {
     if (!active || !expressionReady) return
     const halfEye = half.current
     const closedEye = closed.current
@@ -129,26 +157,31 @@ export function AronaPortrait({
       )
     }
     const schedule = () => {
-      const delay = doubleBlink ? 380 : 3000 + Math.random() * 3000
+      const delay = doubleBlink
+        ? 380
+        : isPlana
+          ? 4500 + Math.random() * 3500
+          : 3000 + Math.random() * 3000
       timer = window.setTimeout(() => {
-        blink(220)
-        doubleBlink = !doubleBlink && Math.random() < 0.15
+        blink(isPlana ? 280 : 220)
+        doubleBlink = !isPlana && !doubleBlink && Math.random() < 0.15
         schedule()
       }, delay)
     }
     const unsubscribe = subscribe(() => {
       window.clearTimeout(timer)
       doubleBlink = false
-      blink(1100)
-      head.animate(
-        [
-          { transform: 'rotate(0deg)' },
-          { transform: 'rotate(-0.65deg)', offset: 0.3 },
-          { transform: 'rotate(-0.45deg)', offset: 0.65 },
-          { transform: 'rotate(0deg)' },
-        ],
-        { duration: 1100, easing: 'ease-in-out' }
-      )
+      blink(isPlana ? 800 : 1100)
+      if (!isPlana)
+        head.animate(
+          [
+            { transform: 'rotate(0deg)' },
+            { transform: 'rotate(-0.65deg)', offset: 0.3 },
+            { transform: 'rotate(-0.45deg)', offset: 0.65 },
+            { transform: 'rotate(0deg)' },
+          ],
+          { duration: 1100, easing: 'ease-in-out' }
+        )
       schedule()
     })
     schedule()
@@ -157,7 +190,21 @@ export function AronaPortrait({
       unsubscribe()
       cancel()
     }
-  }, [active, expressionReady, subscribe])
+  }, [active, expressionReady, isPlana, subscribe])
+
+  const expressions = (
+    <div
+      className={styles.expressionRegion}
+      style={
+        expressionReady
+          ? ({ '--expressions': `url("${artwork.expressions}")` } as CSSProperties)
+          : undefined
+      }
+    >
+      <div ref={half} className={`${styles.expression} ${styles.halfEyes}`} />
+      <div ref={closed} className={`${styles.expression} ${styles.closedEyes}`} />
+    </div>
+  )
 
   return (
     <div
@@ -201,7 +248,11 @@ export function AronaPortrait({
         src={artwork.src}
         width={artwork.width}
         height={artwork.height}
-        alt="阿罗娜开心地微笑，伸出食指轻触屏幕"
+        alt={
+          artwork.character === 'plana'
+            ? '普拉娜安静地微笑，抬起指尖轻触屏幕'
+            : '阿罗娜开心地微笑，伸出食指轻触屏幕'
+        }
         loading="eager"
         fetchPriority="high"
         decoding="async"
@@ -227,18 +278,13 @@ export function AronaPortrait({
               decoding="async"
               draggable={false}
             />
-            <div
-              className={styles.expressionRegion}
-              style={
-                expressionReady
-                  ? ({ '--expressions': `url("${artwork.expressions}")` } as CSSProperties)
-                  : undefined
-              }
-            >
-              <div ref={half} className={`${styles.expression} ${styles.halfEyes}`} />
-              <div ref={closed} className={`${styles.expression} ${styles.closedEyes}`} />
-            </div>
+            {expressions}
           </div>
+        </div>
+      )}
+      {isPlana && artwork.expressions && (
+        <div ref={response} className={styles.headResponse} aria-hidden="true">
+          {expressions}
         </div>
       )}
     </div>

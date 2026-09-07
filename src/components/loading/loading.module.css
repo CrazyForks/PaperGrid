@@ -1,16 +1,38 @@
 .startup {
+  --startup-art: url('/assets/blue-archive/loading-desktop.webp');
   position: fixed;
   z-index: 200;
+  isolation: isolate;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #fff url('/assets/blue-archive/loading-desktop.webp') center / cover;
+  background: #fff;
   color: #1289f9;
   /* Also reveal server-rendered content if application JavaScript fails to start. */
   animation: failOpen 0s 10s forwards !important;
   transition: opacity 240ms ease;
+}
+.startup::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: var(--startup-art) center / cover;
+}
+:global(.dark) .startup {
+  background: var(--background);
+  color: var(--primary);
+}
+:global(.dark) .startup::before {
+  filter: invert(1);
+  opacity: 0.35;
+  mix-blend-mode: screen;
+}
+:global(.dark) .progress {
+  background: color-mix(in srgb, currentColor 18%, transparent);
 }
 .startup[data-done] {
   opacity: 0;
@@ -27,6 +49,14 @@
   height: 100%;
   background: url('/assets/blue-archive/arona-loading.webp') left top / 400% 100% no-repeat;
   animation: expressions 4s steps(1) infinite;
+}
+:global(.dark) .avatar {
+  animation: planaFloat 3.6s ease-in-out infinite;
+}
+:global(.dark) .avatar > div {
+  background-image: url('/assets/blue-archive/plana-loading.webp');
+  background-size: 200% 100%;
+  animation: planaBlink 4.8s steps(1) infinite;
 }
 .connecting {
   font:
@@ -122,6 +152,25 @@
     background-position-x: 100%;
   }
 }
+@keyframes planaFloat {
+  0%,
+  100% {
+    transform: translateY(-6px);
+  }
+  50% {
+    transform: translateY(0);
+  }
+}
+@keyframes planaBlink {
+  0%,
+  49%,
+  100% {
+    background-position-x: 0%;
+  }
+  45% {
+    background-position-x: 100%;
+  }
+}
 @keyframes flash {
   0%,
   65%,
@@ -140,7 +189,7 @@
 }
 @media (max-width: 767px) {
   .startup {
-    background-image: url('/assets/blue-archive/loading-mobile.webp');
+    --startup-art: url('/assets/blue-archive/loading-mobile.webp');
   }
   .avatar {
     width: 165px;
@@ -149,6 +198,8 @@
 @media (prefers-reduced-motion: reduce) {
   .avatar,
   .avatar > div,
+  :global(.dark) .avatar,
+  :global(.dark) .avatar > div,
   .triangles path {
     animation: none;
   }

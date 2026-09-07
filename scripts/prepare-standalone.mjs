@@ -12,7 +12,10 @@ await cp(await realpath('node_modules/bcryptjs'), bcryptDestination, { recursive
 for (const asset of [
   'arona-touch-eyes.webp',
   'arona-expressions.webp',
+  'plana-touch.webp',
+  'plana-expressions.webp',
   'blue-archive/arona-loading.webp',
+  'blue-archive/plana-loading.webp',
   'blue-archive/loading-desktop.webp',
   'blue-archive/loading-mobile.webp',
   'blue-archive/triangle-grid.webp',

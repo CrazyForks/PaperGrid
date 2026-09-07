@@ -272,3 +272,44 @@
     opacity: 1;
   }
 }
+
+.scene[data-character='plana'] .figure {
+  filter: drop-shadow(0 8px 24px #b7a8e018);
+  animation: bodyBreath 8s ease-in-out infinite;
+}
+.scene[data-character='plana'] .figure[data-active='false'] {
+  animation-play-state: paused;
+}
+.scene[data-character='plana'] .expressionRegion {
+  left: calc(800 / 1254 * 100%);
+  top: calc(500 / 1254 * 100%);
+  width: calc(180 / 1254 * 100%);
+  height: calc(135 / 1254 * 100%);
+}
+.scene[data-character='plana'] .light {
+  background: radial-gradient(ellipse, #bac9e228, #c788ad10 55%, transparent 72%);
+}
+.scene[data-character='plana'] .contact {
+  color: #f2b6d3;
+}
+.scene[data-character='plana'] .contactGlow {
+  background: radial-gradient(circle, #fff4fa90 0%, #edb6d044 22%, transparent 68%);
+}
+.scene[data-character='plana'] .orbit svg {
+  filter: drop-shadow(0 0 3px #df8bb4ba);
+}
+.scene[data-character='plana'] .orbit::before {
+  box-shadow: 0 0 6px #e6a1c67a;
+}
+.scene[data-character='plana'] .contact:focus-visible {
+  outline-color: #f2b6d3;
+}
+.scene[data-character='plana'] .burst i {
+  border-color: #edb5d3;
+  box-shadow: 0 0 14px #e6a1c650;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene[data-character='plana'] .figure {
+    animation: none;
+  }
+}

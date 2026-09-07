@@ -404,3 +404,26 @@
     transition: none;
   }
 }
+
+.preview {
+  position: absolute;
+  inset: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
+.previewArtwork {
+  width: min(100cqw, calc(100cqh * var(--preview-ratio)));
+  aspect-ratio: var(--preview-ratio);
+  background: var(--preview-image) center / contain no-repeat;
+  mask-image: linear-gradient(transparent, #000 7%, #000 87%, transparent);
+}
+.previewDark {
+  display: none;
+}
+:global(.dark) .previewLight {
+  display: none;
+}
+:global(.dark) .previewDark {
+  display: grid;
+}

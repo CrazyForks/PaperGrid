@@ -46,6 +46,7 @@ export function AronaVisual({ artwork }: { artwork: AronaArtwork }) {
     <div
       ref={scene}
       className={styles.scene}
+      data-character={artwork.character ?? 'arona'}
       onPointerMove={followPointer}
       onPointerLeave={resetPosition}
       style={
@@ -63,7 +64,7 @@ export function AronaVisual({ artwork }: { artwork: AronaArtwork }) {
           <button
             type="button"
             className={styles.contact}
-            aria-label="轻触阿罗娜的指尖，泛起光圈"
+            aria-label={`轻触${artwork.character === 'plana' ? '普拉娜' : '阿罗娜'}的指尖，泛起光圈`}
             onClick={touch}
           >
             <span className={styles.breathing} aria-hidden="true">
