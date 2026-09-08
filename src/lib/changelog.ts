@@ -5,6 +5,9 @@ export type ChangelogItem = {
 }
 
 export const CHANGELOG: ChangelogItem[] = [
+  { version: '1.1.5', date: '2026-09-08', highlights: [
+    '修复 Cloudflare 环境下暗色加载界面先显示亮色的问题。',
+  ] },
   { version: '1.1.4', date: '2026-09-07', highlights: [
     '暗色模式新增普拉娜首页与加载表情，支持眨眼和轻触互动。',
     '优化 404 页面，修复跟随系统主题时首次切换不生效的问题。',
